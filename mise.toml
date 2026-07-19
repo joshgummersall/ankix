@@ -1,0 +1,37 @@
+[tools]
+go = "1.26.5"
+yt-dlp = "latest"
+
+[tasks.build]
+description = "Build ankix into bin/"
+run = "mkdir -p bin && go build -o bin/ankix ./cmd/ankix"
+
+[tasks.dev]
+description = "Run ankix bin"
+run = "go run ./cmd/ankix"
+
+[tasks.test]
+description = "Run Go tests"
+run = "go test ./..."
+
+[tasks.vet]
+description = "Run go vet"
+run = "go vet ./..."
+
+[tasks.clean]
+description = "Remove build artifacts"
+run = "rm -rf bin"
+
+[tasks.setup-vocab]
+description = "Scaffold local dev environment for the vocab command (installs deps, creates ankindle Ollama model)"
+dir = "ollama/vocab"
+run = ["mise run install", "mise run create"]
+
+[tasks.setup-youtube]
+description = "Scaffold local dev environment for the youtube command (creates ankitube Ollama model)"
+dir = "ollama/youtube"
+run = "mise run create"
+
+[tasks.setup]
+description = "Scaffold local dev environment for both commands"
+depends = ["setup-vocab", "setup-youtube"]

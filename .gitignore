@@ -1,0 +1,4 @@
+*.bak
+*.db
+bin/
+node_modules/

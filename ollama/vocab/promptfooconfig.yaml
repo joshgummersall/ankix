@@ -1,0 +1,171 @@
+description: ankindle word-in-context translation eval
+
+prompts:
+  - "Word: {{word}} | Sentence: {{sentence}}"
+
+providers:
+  - id: ollama:chat:ankindle
+
+defaultTest:
+  assert:
+    - type: regex
+      value: "^TRANSLATION: .+ \\| LEMMA: .+$"
+
+tests:
+  - vars:
+      word: banco
+      sentence: Nos sentamos en el banco del parque mientras esperábamos el autobús.
+    assert:
+      - type: icontains
+        value: "TRANSLATION: bench"
+      - type: icontains
+        value: "LEMMA: bench"
+
+  - vars:
+      word: corría
+      sentence: El perro corría por el jardín cuando empezó a llover.
+    assert:
+      - type: icontains
+        value: "TRANSLATION: was running"
+      - type: icontains
+        value: "LEMMA: to run"
+
+  - vars:
+      word: envidia
+      sentence: No pudo evitar sentir envidia al ver el nuevo coche de su vecino.
+    assert:
+      - type: regex
+        value: "TRANSLATION: (envy|jealousy)"
+      - type: regex
+        value: "LEMMA: (envy|jealousy)"
+
+  - vars:
+      word: rompió
+      sentence: Se le hizo un nudo en la garganta y rompió a llorar sin poder contenerse.
+    assert:
+      - type: icontains
+        value: "LEMMA: to break"
+
+  - vars:
+      word: adelante
+      sentence: A pesar de las dificultades, siguió adelante con determinación.
+    assert:
+      - type: icontains
+        value: "TRANSLATION: forward"
+
+  - vars:
+      word: llaves
+      sentence: Compré unas llaves nuevas para la puerta.
+    assert:
+      - type: icontains
+        value: "TRANSLATION: keys"
+      - type: icontains
+        value: "LEMMA: key"
+
+  - description: "must not include neighboring adjective (rule 4)"
+    vars:
+      word: llaves
+      sentence: Compré unas llaves nuevas para la puerta.
+    assert:
+      - type: not-icontains
+        value: "new keys"
+
+  - description: "cuenta idiom - darse cuenta"
+    vars:
+      word: cuenta
+      sentence: Ella se dio cuenta de que había olvidado las llaves.
+    assert:
+      - type: icontains
+        value: "TRANSLATION: realized"
+      - type: icontains
+        value: "LEMMA: to realize"
+
+  - vars:
+      word: ahora
+      sentence: Modelos de conjugación Preámbulo Al contemplar, ahora con tres siglos de distancia, los jalones que se sucedieron en la fundación de la Real Academia Española y el alumbramiento de su espléndida obra primera, llama la atención una peculiar circunstancia que es la reiteración, se diría que casi cabalística, aunque indudablemente casual, del número trece en los intervalos de aquellos hitos.
+    assert:
+      - type: icontains
+        value: "TRANSLATION: now"
+      - type: icontains
+        value: "LEMMA: now"
+
+  - vars:
+      word: poder
+      sentence: Al inicio de uno de los capítulos de Los ensayos («La libertad de conciencia», II, 19), Montaigne hace referencia a la destrucción que el fanatismo causa cuando alcanza el poder; más grave aún, según él, que la producida por las invasiones bárbaras.
+    assert:
+      - type: icontains
+        value: "TRANSLATION: power"
+      - type: icontains
+        value: "LEMMA: power"
+
+  - vars:
+      word: dio
+      sentence: Leer más: Selección Mexicana: Cruz Azul base de la convocatoria ESTADISTICAS LIGA MX El club dio el salto al fútbol profesional en 1960, ingresando a la Segunda División de México.
+    assert:
+      - type: icontains
+        value: "TRANSLATION: gave"
+      - type: icontains
+        value: "LEMMA: to give"
+
+  - vars:
+      word: Bajo
+      sentence: Bajo el mando de Luis Fernando Tena, Cruz Azul derrotó al León y logró su octavo título de Liga.
+    assert:
+      - type: icontains
+        value: "TRANSLATION: under"
+      - type: icontains
+        value: "LEMMA: under"
+
+  - vars:
+      word: alcanza
+      sentence: Al inicio de uno de los capítulos de Los ensayos («La libertad de conciencia», II, 19), Montaigne hace referencia a la destrucción que el fanatismo causa cuando alcanza el poder; más grave aún, según él, que la producida por las invasiones bárbaras.
+    assert:
+      - type: icontains
+        value: "TRANSLATION: reaches"
+      - type: icontains
+        value: "LEMMA: to reach"
+
+  - vars:
+      word: causa
+      sentence: Al inicio de uno de los capítulos de Los ensayos («La libertad de conciencia», II, 19), Montaigne hace referencia a la destrucción que el fanatismo causa cuando alcanza el poder; más grave aún, según él, que la producida por las invasiones bárbaras.
+    assert:
+      - type: icontains
+        value: "TRANSLATION: causes"
+      - type: icontains
+        value: "LEMMA: cause"
+
+  - vars:
+      word: fanatismo
+      sentence: Al inicio de uno de los capítulos de Los ensayos («La libertad de conciencia», II, 19), Montaigne hace referencia a la destrucción que el fanatismo causa cuando alcanza el poder; más grave aún, según él, que la producida por las invasiones bárbaras.
+    assert:
+      - type: icontains
+        value: "TRANSLATION: fanaticism"
+      - type: icontains
+        value: "LEMMA: fanaticism"
+
+  - vars:
+      word: capítulos
+      sentence: Al inicio de uno de los capítulos de Los ensayos («La libertad de conciencia», II, 19), Montaigne hace referencia a la destrucción que el fanatismo causa cuando alcanza el poder; más grave aún, según él, que la producida por las invasiones bárbaras.
+    assert:
+      - type: icontains
+        value: "TRANSLATION: chapters"
+      - type: icontains
+        value: "LEMMA: chapter"
+
+  - vars:
+      word: inicio
+      sentence: Al inicio de uno de los capítulos de Los ensayos («La libertad de conciencia», II, 19), Montaigne hace referencia a la destrucción que el fanatismo causa cuando alcanza el poder; más grave aún, según él, que la producida por las invasiones bárbaras.
+    assert:
+      - type: icontains
+        value: "TRANSLATION: beginning"
+      - type: icontains
+        value: "LEMMA: beginning"
+
+  - vars:
+      word: heredero
+      sentence: Pero la inexactitud filológica es compensada con creces por otro tipo de rigor: el de quien se enfrenta al gran dilema de la vida o la muerte, y no sólo de su propia persona, también de la civilización de la que se siente heredero y actor.
+    assert:
+      - type: icontains
+        value: "TRANSLATION: heir"
+      - type: icontains
+        value: "LEMMA: heir"
