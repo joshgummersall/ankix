@@ -86,8 +86,7 @@ func (m Model) handleWordPickKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "e":
-		m.enterEditSentence()
-		return m, nil
+		return m, m.enterEditSentence()
 	case "x":
 		if len(m.wordTokens) == 0 {
 			return m, nil

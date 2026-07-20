@@ -30,7 +30,7 @@ func newYouTubeCmd() *cobra.Command {
 	}
 	defaultCacheDir += "/ankix/youtube"
 
-	cmd.PersistentFlags().StringVar(&f.deck, "deck", "Spanish::YouTube", "Anki deck name")
+	cmd.PersistentFlags().StringVar(&f.deck, "deck", "Spanish::AnkiX", "Anki deck name")
 	cmd.PersistentFlags().StringVar(&f.ankiConnect, "ankiconnect-url", "http://localhost:8765", "AnkiConnect URL")
 	cmd.PersistentFlags().StringVar(&f.ollamaURL, "ollama-url", "http://localhost:11434", "Ollama URL")
 	cmd.PersistentFlags().StringVar(&f.ollamaModel, "ollama-model", "ankitube", "Ollama gloss model name")

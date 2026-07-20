@@ -37,7 +37,7 @@ Flags:
 - `--lang` — language prefix to filter words by, e.g. `en`, `es` (default `en`)
 - `--deck` — Anki deck to sync into (default `Kindle Vocab`)
 - `--model` — Ollama model used to define words (default `ankindle`)
-- `--tag` — tags applied to new notes (default `kindle`)
+- `--tag` — tags applied to new notes (default `AnkiX::Source::Kindle`)
 - `--dry-run` — preview without writing to Anki
 - `--mastered` — filter out words already marked Mastered in `vocab.db`
   from this sync (by default they're included), and mark words that end
@@ -48,7 +48,7 @@ Flags:
   `vocab.db` is copied to `vocab.db.bak` alongside it.
 - `--ankiconnect-url` — AnkiConnect endpoint (default `http://localhost:8765`)
 
-Each new note is tagged `kindle-word::<word>`; re-running `sync` checks
+Each new note is tagged `AnkiX::Word::<word>`; re-running `sync` checks
 AnkiConnect for that tag in the target deck to skip words already synced,
 so it's safe to re-run.
 
@@ -69,7 +69,7 @@ terminal UI for browsing and generating cards; `review` opens an existing
 
 Flags (persistent across both subcommands):
 
-- `--deck` — Anki deck name (default `Spanish::YouTube`)
+- `--deck` — Anki deck name (default `Spanish::AnkiX`)
 - `--ankiconnect-url` — AnkiConnect URL (default `http://localhost:8765`)
 - `--ollama-url` — Ollama URL (default `http://localhost:11434`)
 - `--ollama-model` — Ollama gloss model name (default `ankitube`)

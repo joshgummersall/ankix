@@ -57,7 +57,7 @@ func newKindleVocabCmd() *cobra.Command {
 	cmd.Flags().StringVar(&o.lang, "lang", "en", "language prefix to filter words by, matched against the dictionary used for each lookup (e.g. en, es); empty for all")
 	cmd.Flags().StringVar(&o.deck, "deck", "Kindle Vocab", "Anki deck name to sync into")
 	cmd.Flags().StringVar(&o.ankiURL, "ankiconnect-url", "http://localhost:8765", "AnkiConnect endpoint")
-	cmd.Flags().StringSliceVar(&o.tags, "tag", []string{"kindle"}, "tags to apply to new notes")
+	cmd.Flags().StringSliceVar(&o.tags, "tag", []string{anki.SourceTag("Kindle")}, "tags to apply to new notes")
 	cmd.Flags().BoolVar(&o.dryRun, "dry-run", false, "print what would be synced without writing to Anki (only applies with --headless; the interactive review lets you inspect/skip each word before it's added)")
 	cmd.Flags().BoolVar(&o.mastered, "mastered", false, "filter out words already marked Mastered in vocab.db (default: include them), and mark words that end up in Anki as Mastered (opens --db read-write)")
 	cmd.Flags().BoolVar(&o.full, "full", false, "ignore the sync watermark stored in vocab.db and consider every lookup again")
@@ -194,7 +194,7 @@ func runSync(o *syncOptions) error {
 }
 
 func noteExists(client *anki.Client, deck, phrase string) (bool, error) {
-	query := fmt.Sprintf(`deck:%q tag:%q`, deck, kindle.WordTag(phrase))
+	query := fmt.Sprintf(`deck:%q tag:%q`, deck, anki.WordTag(phrase))
 	ids, err := client.FindNotes(query)
 	if err != nil {
 		return false, err

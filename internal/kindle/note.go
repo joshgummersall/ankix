@@ -24,13 +24,6 @@ func FindPhrase(sentence, phrase string) (start, end int) {
 	return idx, idx + len(phrase)
 }
 
-// WordTag returns a per-phrase tag used to detect notes already synced for
-// a given headword or phrase, independent of how the Front/Back fields are
-// rendered.
-func WordTag(phrase string) string {
-	return "kindle-word::" + strings.ToLower(phrase)
-}
-
 // BuildNote constructs a Basic (Front/Back) note for a headword or phrase
 // within sentence. If start is negative, no byte range was found/chosen and
 // the sentence (if any) is appended unbolded. definition is expected to
@@ -46,7 +39,7 @@ func BuildNote(deck string, tags []string, e Entry, sentence string, start, end 
 		front += sentence
 	}
 
-	allTags := append(append([]string{}, tags...), WordTag(phrase))
+	allTags := append(append([]string{}, tags...), anki.WordTag(phrase))
 
 	return anki.Note{
 		DeckName:  deck,

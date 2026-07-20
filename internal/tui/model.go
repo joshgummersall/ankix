@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/joshgummersall/ankix/internal/anki"
 	"github.com/joshgummersall/ankix/internal/subtitle"
@@ -61,7 +63,7 @@ type Model struct {
 	selWordStart, selWordEnd int // confirmed word selection, inclusive
 
 	sentence      string
-	sentenceInput textinput.Model // pre-filled with sentence while editing, for fixing transcript typos
+	sentenceInput textarea.Model // pre-filled with sentence while editing, for fixing transcript typos; wraps long lines
 	tokens        []token
 	wordTokens    []int // indices into tokens that are words
 	wordCursor    int   // index into wordTokens
@@ -80,9 +82,11 @@ func New(cfg Config) Model {
 	si := textinput.New()
 	si.Prompt = "/"
 
-	sei := textinput.New()
+	sei := textarea.New()
 	sei.Prompt = "edit: "
-	sei.Width = 120
+	sei.ShowLineNumbers = false
+	sei.SetWidth(120)
+	sei.SetHeight(3)
 
 	words := subtitle.FlattenWords(cfg.Transcript.Cues)
 	cueFirstWord := make([]int, len(cfg.Transcript.Cues))
@@ -126,6 +130,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport.Width = msg.Width
 			m.viewport.Height = vpHeight
 		}
+		m.sentenceInput.SetWidth(msg.Width)
 		m.syncViewport()
 		return m, nil
 
@@ -202,6 +207,10 @@ func (m Model) View() string {
 		// here — View has a value receiver, so mutating m.viewport here
 		// wouldn't persist to the next frame).
 		body = m.viewport.View()
+	}
+
+	if m.state == stateWordPick && m.width > 0 {
+		body = lipgloss.NewStyle().Width(m.width).Render(body)
 	}
 
 	statusLine := statusStyle

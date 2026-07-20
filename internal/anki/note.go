@@ -45,7 +45,7 @@ func BuildWordNote(deck, videoTitle, videoID string, cueStart time.Duration, sen
 			"Front": front,
 			"Back":  back.String(),
 		},
-		Tags: []string{"ankitube", "youtube::" + videoID, "word::" + strings.ToLower(word)},
+		Tags: []string{SourceTag("YouTube"), "AnkiX::Video::" + videoID, WordTag(word)},
 		Options: &NoteOptions{
 			AllowDuplicate: false,
 			DuplicateScope: "deck",

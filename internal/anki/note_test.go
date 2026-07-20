@@ -105,11 +105,11 @@ func TestBuildWordNote_TagsIncludeWord(t *testing.T) {
 	n := BuildWordNote("Deck", "Title", "vid1", 0, "la Casa vieja", WordSelection{Start: 3, End: 7})
 	found := false
 	for _, tag := range n.Tags {
-		if tag == "word::casa" {
+		if tag == "AnkiX::Word::casa" {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("Tags = %v, want a lowercase word::casa tag", n.Tags)
+		t.Errorf("Tags = %v, want a lowercase AnkiX::Word::casa tag", n.Tags)
 	}
 }

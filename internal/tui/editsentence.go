@@ -7,12 +7,13 @@ import (
 // enterEditSentence opens a text input pre-filled with the current sentence
 // so typos introduced by auto-generated captions can be fixed before words
 // are picked for cards.
-func (m *Model) enterEditSentence() {
+func (m *Model) enterEditSentence() tea.Cmd {
 	m.sentenceInput.SetValue(m.sentence)
 	m.sentenceInput.CursorEnd()
-	m.sentenceInput.Focus()
+	cmd := m.sentenceInput.Focus()
 	m.state = stateEditSentence
 	m.setStatus("", false)
+	return cmd
 }
 
 func (m Model) handleEditSentenceKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
