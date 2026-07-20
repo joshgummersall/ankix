@@ -14,6 +14,7 @@ func main() {
 		Use:   "ankix",
 		Short: "Generate Anki cards from Kindle vocab highlights and YouTube transcripts",
 	}
+	root.AddCommand(newInstallCmd())
 	root.AddCommand(newKindleCmd())
 	root.AddCommand(newYouTubeCmd())
 

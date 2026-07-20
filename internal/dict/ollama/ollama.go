@@ -107,6 +107,13 @@ func (p *Provider) chat(content string) (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		var e struct {
+			Error string `json:"error"`
+		}
+		json.NewDecoder(resp.Body).Decode(&e)
+		if strings.Contains(e.Error, "not found") {
+			return "", fmt.Errorf("ollama chat: model %q not found; run `ankix install` to build it", p.Model)
+		}
 		return "", fmt.Errorf("ollama chat: unexpected status %s", resp.Status)
 	}
 
