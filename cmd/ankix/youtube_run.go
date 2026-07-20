@@ -6,11 +6,22 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/joshgummersall/ankix/internal/anki"
+	"github.com/joshgummersall/ankix/internal/dict/ollama"
 	"github.com/joshgummersall/ankix/internal/subtitle"
 	"github.com/joshgummersall/ankix/internal/translate"
-	"github.com/joshgummersall/ankix/internal/translate/ollama"
 	"github.com/joshgummersall/ankix/internal/tui"
 )
+
+// glossProvider adapts the shared dict/ollama Provider (which defines words
+// for the kindle flow) to translate.Provider, so youtube can reuse the same
+// Ollama model instead of maintaining a near-duplicate client.
+type glossProvider struct {
+	*ollama.Provider
+}
+
+func (g glossProvider) Gloss(word, sentence string) (string, error) {
+	return g.Define(word, sentence)
+}
 
 func runFetch(f *youtubeFlags, url string) error {
 	fmt.Println("fetching Spanish subtitles via yt-dlp...")
@@ -49,7 +60,7 @@ func runReview(f *youtubeFlags, path string) error {
 func launchYouTubeTUI(f *youtubeFlags, transcript *subtitle.Transcript, title string) error {
 	var translator translate.Provider
 	if !f.noGloss {
-		translator = ollama.New(f.ollamaURL, f.ollamaModel)
+		translator = glossProvider{ollama.New(f.ollamaURL, f.ollamaModel)}
 	}
 
 	client := anki.New(f.ankiConnect)

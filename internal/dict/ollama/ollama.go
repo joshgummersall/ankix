@@ -1,8 +1,9 @@
-// Package ollama defines vocab words by asking a local "ankindle" Ollama
-// model (see ollama/Modelfile) for a contextual translation and
-// dictionary lemma of a word as used in a sentence. The model's system
-// prompt and few-shot examples are baked into the Modelfile itself, so
-// this package only needs to send the per-word chat message it expects.
+// Package ollama defines vocab words (and, via the translate adapter, glosses
+// subtitle words) by asking a local "ankindle" Ollama model (see
+// ollama/vocab/Modelfile) for a contextual translation and dictionary lemma
+// of a word as used in a sentence. The model's system prompt and few-shot
+// examples are baked into the Modelfile itself, so this package only needs
+// to send the per-word chat message it expects.
 package ollama
 
 import (

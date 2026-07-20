@@ -22,16 +22,7 @@ run = "go vet ./..."
 description = "Remove build artifacts"
 run = "rm -rf bin"
 
-[tasks.setup-vocab]
-description = "Scaffold local dev environment for the vocab command (installs deps, creates ankindle Ollama model)"
+[tasks.setup]
+description = "Scaffold local dev environment for both commands (installs deps, creates the shared ankindle Ollama model)"
 dir = "ollama/vocab"
 run = ["mise run install", "mise run create"]
-
-[tasks.setup-youtube]
-description = "Scaffold local dev environment for the youtube command (creates ankitube Ollama model)"
-dir = "ollama/youtube"
-run = "mise run create"
-
-[tasks.setup]
-description = "Scaffold local dev environment for both commands"
-depends = ["setup-vocab", "setup-youtube"]

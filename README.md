@@ -5,9 +5,8 @@ and YouTube video transcripts.
 
 ## Requirements
 
-- [Ollama](https://ollama.com/) — the `kindle` command needs the `ankindle`
-  model (`ollama/vocab/Modelfile`), the `youtube` command needs the
-  `ankitube` model (`ollama/youtube/Modelfile`)
+- [Ollama](https://ollama.com/) — both the `kindle` and `youtube` commands use
+  the same `ankindle` model (`ollama/vocab/Modelfile`)
 - [Anki](https://apps.ankiweb.net/) running with [AnkiConnect](https://ankiweb.net/shared/info/2055492159) installed
 - Go to build; `yt-dlp` for the `youtube` command
 
@@ -15,7 +14,7 @@ and YouTube video transcripts.
 
 ```
 mise run build       # builds bin/ankix
-mise run setup       # creates both Ollama models
+mise run setup       # creates the Ollama model
 ```
 
 ## `ankix kindle` — Kindle vocabulary builder
@@ -72,7 +71,7 @@ Flags (persistent across both subcommands):
 - `--deck` — Anki deck name (default `Spanish::AnkiX`)
 - `--ankiconnect-url` — AnkiConnect URL (default `http://localhost:8765`)
 - `--ollama-url` — Ollama URL (default `http://localhost:11434`)
-- `--ollama-model` — Ollama gloss model name (default `ankitube`)
+- `--ollama-model` — Ollama gloss model name (default `ankindle`)
 - `--sub-lang` — subtitle language code (default `es`)
 - `--cache-dir` — subtitle cache directory
 - `--no-gloss` — skip Ollama gloss lookups

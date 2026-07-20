@@ -19,9 +19,8 @@ type kState int
 
 const (
 	kPicking kState = iota
-	kVisual
+	kExpanding
 	kEditSentence
-	kConfirm
 	kSubmitting
 	kDone
 )
@@ -48,19 +47,57 @@ type KindleConfig struct {
 	Mastered bool
 }
 
+// kindlePhrase is the live, editable word/phrase for one entry in the
+// current sentence group: lo/hi are word-token indices (into m.wordTokens),
+// inclusive, defaulting to that entry's own single-word occurrence.
+// Included toggles whether it's added as a card when the sentence submits.
+// mergedInto is -1 for a standalone phrase; otherwise it's the index of
+// another phrase this one was absorbed into after an expansion made the two
+// overlap, and lo/hi/included are stale and ignored.
+type kindlePhrase struct {
+	lo, hi     int
+	included   bool
+	entry      kindle.Entry
+	mergedInto int
+
+	// Definition lookup for the phrase's current text, so a preview can be
+	// shown before submitting. defText is the phrase text the lookup
+	// below applies to — once lo/hi/text changes, it no longer matches and
+	// a fresh lookup is due (see refreshDefinitions).
+	defText    string
+	definition string
+	defErr     error
+	defPending bool
+}
+
+// kindleSelection is one accepted word/phrase, resolved to byte offsets in
+// the sentence, ready to become a card. entries holds every entry the
+// phrase covers — more than one if expanding it merged it with a
+// neighboring word's phrase. definition is whatever was already fetched and
+// previewed for this phrase, reused as-is rather than looked up again.
+type kindleSelection struct {
+	entries    []kindle.Entry
+	start, end int
+	definition string
+}
+
 // KindleModel is the root Bubble Tea model for reviewing Kindle vocab
 // lookups. Entries are grouped by their usage sentence up front, so every
 // word looked up within the same sentence is reviewed together: the
-// sentence is shown once with every candidate word in it highlighted, and
-// the user steps word by word through that group, extending or moving the
-// current word's highlight (e.g. to capture a reflexive verb form or
-// multi-word phrase) before it's defined and synced to Anki.
+// sentence is shown once with a live, editable phrase for every candidate
+// word in it. Pressing v starts expanding whichever word is nearest the
+// cursor; tab/shift+tab then grow that word's phrase right/left, and enter
+// confirms it (esc cancels back to before expanding). If expanding makes
+// two words' phrases overlap, they're merged into a single card covering
+// both. s toggles a word out of the batch. Since every word already has a
+// sensible default (its own single-word phrase, included), enter from the
+// normal (non-expanding) state submits every included word in the sentence
+// as its own card in one action — no per-word accept step required.
 type KindleModel struct {
 	cfg    KindleConfig
 	groups []kindle.SentenceGroup
 
 	groupIdx int
-	wordIdx  int // index into groups[groupIdx].Entries
 
 	width, height int
 
@@ -69,34 +106,30 @@ type KindleModel struct {
 	sentence   string
 	tokens     []token
 	wordTokens []int // indices into tokens that are words
-	wordCursor int
+	wordCursor int   // index into wordTokens
 
-	// visualLo, visualHi are independent word-token boundaries (indices into
-	// wordTokens) of the in-progress visual selection, so the phrase can be
-	// grown to the left and right independently instead of pivoting around
-	// a single fixed anchor.
-	visualLo, visualHi int
+	phrases []kindlePhrase // live phrase state for groups[groupIdx].Entries
 
-	otherRanges [][2]int // byte ranges of this sentence's other candidate words
+	// expandIdx is the phrase currently being grown (valid only in
+	// kExpanding); expandOrigLo/Hi is its pre-expansion range, restored on
+	// esc.
+	expandIdx                  int
+	expandOrigLo, expandOrigHi int
 
 	// sentenceInput edits the current group's sentence once, for every word
 	// in that sentence — see enterEditSentence.
 	sentenceInput textarea.Model
 
-	selStart, selEnd int // byte offsets of the confirmed phrase in sentence, or -1 if none
-
-	definition string
-	defPending bool
-	defErr     error
-
 	added, duplicates, skipped int
 
 	status    string
 	statusErr bool
+
+	initCmd tea.Cmd // definition lookups queued by the first loadGroup, returned from Init
 }
 
-// NewKindleReview returns a KindleModel positioned at the first word of the
-// first sentence group.
+// NewKindleReview returns a KindleModel positioned at the first sentence
+// group.
 func NewKindleReview(cfg KindleConfig) KindleModel {
 	sei := textarea.New()
 	sei.Prompt = "edit: "
@@ -105,49 +138,17 @@ func NewKindleReview(cfg KindleConfig) KindleModel {
 	sei.SetHeight(3)
 
 	m := KindleModel{cfg: cfg, groups: kindle.GroupBySentence(cfg.Entries), sentenceInput: sei}
-	m.loadWord(0, 0)
+	m.initCmd = m.loadGroup(0)
 	return m
 }
 
-func (m *KindleModel) currentEntry() kindle.Entry {
-	return m.groups[m.groupIdx].Entries[m.wordIdx]
-}
+// resetPhrasesForSentence (re)tokenizes m.sentence and rebuilds m.phrases
+// with each entry defaulted to its own single-word occurrence, included.
+// Called whenever the group changes or its sentence text is edited, since
+// either invalidates every previously computed byte offset.
+func (m *KindleModel) resetPhrasesForSentence() {
+	group := m.groups[m.groupIdx]
 
-// flatPosition returns this word's 1-based position across every word in
-// every group, for display (e.g. "word 4/12").
-func (m *KindleModel) flatPosition() int {
-	n := m.wordIdx
-	for _, g := range m.groups[:m.groupIdx] {
-		n += len(g.Entries)
-	}
-	return n + 1
-}
-
-func (m *KindleModel) totalWords() int {
-	return len(m.cfg.Entries)
-}
-
-func (m *KindleModel) advance() {
-	m.loadWord(m.groupIdx, m.wordIdx+1)
-}
-
-// loadWord positions the model at groups[groupIdx].Entries[wordIdx],
-// advancing to the next group once wordIdx runs past the current one, and
-// finishing review once groupIdx runs past the last group.
-func (m *KindleModel) loadWord(groupIdx, wordIdx int) {
-	for groupIdx < len(m.groups) && wordIdx >= len(m.groups[groupIdx].Entries) {
-		groupIdx++
-		wordIdx = 0
-	}
-	if groupIdx >= len(m.groups) {
-		m.state = kDone
-		return
-	}
-	m.groupIdx, m.wordIdx = groupIdx, wordIdx
-	group := m.groups[groupIdx]
-	e := group.Entries[wordIdx]
-
-	m.sentence = group.Usage
 	m.tokens = tokenize(m.sentence)
 	m.wordTokens = m.wordTokens[:0]
 	for ti, t := range m.tokens {
@@ -156,28 +157,132 @@ func (m *KindleModel) loadWord(groupIdx, wordIdx int) {
 		}
 	}
 
-	m.otherRanges = m.otherRanges[:0]
-	for oi, other := range group.Entries {
-		if oi == wordIdx {
+	m.phrases = make([]kindlePhrase, len(group.Entries))
+	for i, e := range group.Entries {
+		start, _ := kindle.FindPhrase(m.sentence, e.Word)
+		idx := m.tokenCursorFor(start)
+		m.phrases[i] = kindlePhrase{lo: idx, hi: idx, included: true, entry: e, mergedInto: -1}
+	}
+
+	m.wordCursor = 0
+	if len(m.phrases) > 0 {
+		m.wordCursor = m.phrases[0].lo
+	}
+}
+
+// refreshDefinitions kicks off a definition lookup for every included,
+// standalone phrase whose current text hasn't been looked up yet (or has
+// changed since it last was, e.g. after an expansion or merge), so a
+// preview of what will be saved is visible before submitting.
+func (m *KindleModel) refreshDefinitions() tea.Cmd {
+	if m.cfg.Dict == nil {
+		return nil
+	}
+	var cmds []tea.Cmd
+	for i := range m.phrases {
+		p := &m.phrases[i]
+		if p.mergedInto != -1 || !p.included {
 			continue
 		}
-		if start, end := kindle.FindPhrase(m.sentence, other.Word); start >= 0 {
-			m.otherRanges = append(m.otherRanges, [2]int{start, end})
+		text := m.sentence[m.tokens[m.wordTokens[p.lo]].start:m.tokens[m.wordTokens[p.hi]].end]
+		if p.defText == text {
+			continue
+		}
+		p.defText = text
+		p.definition = ""
+		p.defErr = nil
+		p.defPending = true
+		cmds = append(cmds, kindleDefCmd(m.cfg.Dict, text, m.sentence, i, text))
+	}
+	return tea.Batch(cmds...)
+}
+
+// loadGroup positions the model at groups[groupIdx], or finishes review
+// once groupIdx runs past the last group. It returns a command to fetch
+// definition previews for the new sentence's words.
+func (m *KindleModel) loadGroup(groupIdx int) tea.Cmd {
+	if groupIdx >= len(m.groups) {
+		m.state = kDone
+		return nil
+	}
+	m.groupIdx = groupIdx
+	m.sentence = m.groups[groupIdx].Usage
+	m.resetPhrasesForSentence()
+	m.state = kPicking
+	m.setStatus(m.pickingStatus(), false)
+	return m.refreshDefinitions()
+}
+
+func (m *KindleModel) pickingStatus() string {
+	cards, included := 0, 0
+	for _, p := range m.phrases {
+		if p.mergedInto != -1 {
+			continue
+		}
+		cards++
+		if p.included {
+			included++
 		}
 	}
-
-	m.selStart, m.selEnd = kindle.FindPhrase(m.sentence, e.Word)
-	m.wordCursor = m.tokenCursorFor(m.selStart)
-	m.definition = ""
-	m.defPending = false
-	m.defErr = nil
-	m.state = kPicking
-
-	status := fmt.Sprintf("word %d/%d: %q — tab/shift+tab move, v extend to a phrase, enter accept", m.flatPosition(), m.totalWords(), e.Word)
-	if len(group.Entries) > 1 {
-		status = fmt.Sprintf("word %d/%d: %q (%d words from this sentence) — tab/shift+tab move, v extend to a phrase, enter accept", m.flatPosition(), m.totalWords(), e.Word, len(group.Entries))
+	word := "card"
+	if cards != 1 {
+		word = "cards"
 	}
-	m.setStatus(status, false)
+	return fmt.Sprintf("sentence %d/%d — %d %s, %d will be added — tab/shift+tab move, v expand nearest word, s toggle skip, e edit sentence, enter add",
+		m.groupIdx+1, len(m.groups), cards, word, included)
+}
+
+// nearestPhrase returns the index into m.phrases whose range is closest to
+// m.wordCursor (0 if the cursor is already within it), ties broken toward
+// the lowest index. Phrases already merged into another are ignored.
+func (m *KindleModel) nearestPhrase() int {
+	best, bestDist := -1, -1
+	for i, p := range m.phrases {
+		if p.mergedInto != -1 {
+			continue
+		}
+		dist := 0
+		switch {
+		case m.wordCursor < p.lo:
+			dist = p.lo - m.wordCursor
+		case m.wordCursor > p.hi:
+			dist = m.wordCursor - p.hi
+		}
+		if bestDist == -1 || dist < bestDist {
+			best, bestDist = i, dist
+		}
+	}
+	if best == -1 {
+		return 0
+	}
+	return best
+}
+
+// mergeOverlaps folds any other standalone phrase whose range now overlaps
+// phrases[i] into phrases[i], growing i's range to cover the union. Called
+// after every expansion so merges happen live as soon as two words' phrases
+// touch.
+func (m *KindleModel) mergeOverlaps(i int) {
+	for j := range m.phrases {
+		if j == i || m.phrases[j].mergedInto != -1 {
+			continue
+		}
+		if m.phrases[j].hi < m.phrases[i].lo || m.phrases[j].lo > m.phrases[i].hi {
+			continue
+		}
+		if m.phrases[j].lo < m.phrases[i].lo {
+			m.phrases[i].lo = m.phrases[j].lo
+		}
+		if m.phrases[j].hi > m.phrases[i].hi {
+			m.phrases[i].hi = m.phrases[j].hi
+		}
+		for k := range m.phrases {
+			if m.phrases[k].mergedInto == j {
+				m.phrases[k].mergedInto = i
+			}
+		}
+		m.phrases[j].mergedInto = i
+	}
 }
 
 // tokenCursorFor returns the index into m.wordTokens of the first word token
@@ -200,7 +305,7 @@ func (m *KindleModel) setStatus(s string, isErr bool) {
 }
 
 func (m KindleModel) Init() tea.Cmd {
-	return nil
+	return m.initCmd
 }
 
 func (m KindleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -214,41 +319,23 @@ func (m KindleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleKindleKey(msg)
 
 	case kindleDefResultMsg:
-		m.defPending = false
-		if msg.err != nil {
-			m.defErr = msg.err
-			m.setStatus(fmt.Sprintf("definition lookup failed: %v", msg.err), true)
-			return m, nil
-		}
-		m.definition = msg.definition
-		if m.definition == "" {
-			m.setStatus("no definition found — enter to add without one, esc to adjust the selection", true)
-		} else {
-			m.setStatus("enter to add, esc to adjust the selection, s to skip this word", false)
+		if msg.idx < len(m.phrases) && m.phrases[msg.idx].defText == msg.text {
+			m.phrases[msg.idx].defPending = false
+			m.phrases[msg.idx].definition = msg.definition
+			m.phrases[msg.idx].defErr = msg.err
 		}
 		return m, nil
 
-	case kindleSubmitResultMsg:
-		switch {
-		case msg.err != nil:
-			m.setStatus(fmt.Sprintf("failed to add %q: %v", m.currentEntry().Word, msg.err), true)
-			m.state = kConfirm
-			return m, nil
-		case msg.duplicate:
-			m.duplicates++
-		default:
-			m.added++
-		}
-		m.advance()
-		return m, nil
-
-	case kindleSkipResultMsg:
+	case kindleBatchSubmitResultMsg:
+		m.added += msg.added
+		m.duplicates += msg.duplicates
+		m.skipped += msg.skipped
 		if msg.err != nil {
-			m.setStatus(fmt.Sprintf("failed to record skip: %v", msg.err), true)
+			m.setStatus(fmt.Sprintf("failed partway through this sentence (%d added, %d already in Anki before the error): %v — enter to retry", msg.added, msg.duplicates, msg.err), true)
+			m.state = kPicking
+			return m, nil
 		}
-		m.skipped++
-		m.advance()
-		return m, nil
+		return m, m.loadGroup(m.groupIdx + 1)
 	}
 	return m, nil
 }
@@ -272,12 +359,10 @@ func (m KindleModel) handleKindleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch m.state {
 	case kPicking:
 		return m.handlePickingKey(msg)
-	case kVisual:
-		return m.handleVisualKey(msg)
+	case kExpanding:
+		return m.handleExpandingKey(msg)
 	case kEditSentence:
 		return m.handleEditSentenceKey(msg)
-	case kConfirm:
-		return m.handleConfirmKey(msg)
 	}
 	return m, nil
 }
@@ -295,64 +380,116 @@ func (m KindleModel) handlePickingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "v":
-		m.visualLo = m.wordCursor
-		m.visualHi = m.wordCursor
-		m.state = kVisual
-		m.setStatus("tab grow right, shift+tab grow left, enter accept, esc cancel", false)
-		return m, nil
-	case "e":
-		return m, m.enterEditSentence()
-	case "s":
-		return m, kindleSkipCmd(m.cfg, m.currentEntry())
-	case "enter":
-		if len(m.wordTokens) == 0 {
-			m.setStatus("no word to select in this sentence — s to skip", true)
+		if len(m.phrases) == 0 {
 			return m, nil
 		}
-		return m.acceptSelection(m.wordCursor, m.wordCursor)
+		i := m.nearestPhrase()
+		m.expandIdx = i
+		m.expandOrigLo, m.expandOrigHi = m.phrases[i].lo, m.phrases[i].hi
+		m.state = kExpanding
+		m.setStatus("tab grow right, shift+tab grow left, enter confirm, esc cancel", false)
+		return m, nil
+	case "s":
+		if len(m.phrases) == 0 {
+			return m, nil
+		}
+		i := m.nearestPhrase()
+		m.phrases[i].included = !m.phrases[i].included
+		m.setStatus(m.pickingStatus(), false)
+		return m, m.refreshDefinitions()
+	case "e":
+		return m, m.enterEditSentence()
+	case "enter":
+		return m.submitGroup()
 	}
 	return m, nil
 }
 
-func (m KindleModel) handleVisualKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+// handleExpandingKey grows or shrinks phrases[m.expandIdx] and merges it
+// with any other phrase it comes to overlap.
+func (m KindleModel) handleExpandingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "l", "right", "tab":
-		if m.visualHi < len(m.wordTokens)-1 {
-			m.visualHi++
+		if m.phrases[m.expandIdx].hi < len(m.wordTokens)-1 {
+			m.phrases[m.expandIdx].hi++
 		}
+		m.mergeOverlaps(m.expandIdx)
+		m.wordCursor = m.phrases[m.expandIdx].hi
 		return m, nil
 	case "h", "left", "shift+tab":
-		if m.visualLo > 0 {
-			m.visualLo--
+		if m.phrases[m.expandIdx].lo > 0 {
+			m.phrases[m.expandIdx].lo--
 		}
+		m.mergeOverlaps(m.expandIdx)
+		m.wordCursor = m.phrases[m.expandIdx].lo
 		return m, nil
 	case "esc":
+		for j := range m.phrases {
+			if m.phrases[j].mergedInto == m.expandIdx {
+				m.phrases[j].mergedInto = -1
+			}
+		}
+		m.phrases[m.expandIdx].lo = m.expandOrigLo
+		m.phrases[m.expandIdx].hi = m.expandOrigHi
 		m.state = kPicking
-		m.setStatus("selection cancelled", false)
-		return m, nil
+		m.setStatus(m.pickingStatus(), false)
+		return m, m.refreshDefinitions()
 	case "enter":
-		return m.acceptSelection(m.visualLo, m.visualHi)
+		m.state = kPicking
+		m.setStatus(m.pickingStatus(), false)
+		return m, m.refreshDefinitions()
 	}
 	return m, nil
 }
 
-// acceptSelection confirms the phrase spanning word-token indices
-// [lo,hi] (inclusive, indices into m.wordTokens) as the reviewed word/phrase
-// and kicks off its definition lookup.
-func (m KindleModel) acceptSelection(lo, hi int) (tea.Model, tea.Cmd) {
-	m.selStart = m.tokens[m.wordTokens[lo]].start
-	m.selEnd = m.tokens[m.wordTokens[hi]].end
-	m.state = kConfirm
-	m.definition = ""
-	m.defErr = nil
-
-	if m.cfg.Dict == nil {
-		m.setStatus("enter to add, esc to adjust the selection, s to skip this word", false)
-		return m, nil
+// submitGroup builds a card for every included phrase in the current
+// sentence and submits them all in one action, and records a skip for
+// every excluded entry so the sync watermark still advances past it. Merged
+// phrases contribute every entry they absorbed to whichever single card
+// their merged range produces.
+func (m KindleModel) submitGroup() (tea.Model, tea.Cmd) {
+	for _, p := range m.phrases {
+		if p.mergedInto == -1 && p.included && p.defPending {
+			m.setStatus("still looking up definitions...", false)
+			return m, nil
+		}
 	}
-	m.defPending = true
-	m.setStatus("looking up definition...", false)
-	return m, kindleDefCmd(m.cfg.Dict, m.sentence[m.selStart:m.selEnd], m.sentence)
+
+	var sels []kindleSelection
+	var skipped []kindle.Entry
+	for i, p := range m.phrases {
+		if p.mergedInto != -1 {
+			continue
+		}
+		entries := []kindle.Entry{p.entry}
+		for j, q := range m.phrases {
+			if j != i && q.mergedInto == i {
+				entries = append(entries, q.entry)
+			}
+		}
+		if !p.included {
+			skipped = append(skipped, entries...)
+			continue
+		}
+		start := m.tokens[m.wordTokens[p.lo]].start
+		end := m.tokens[m.wordTokens[p.hi]].end
+		sels = append(sels, kindleSelection{entries: entries, start: start, end: end, definition: p.definition})
+	}
+
+	if len(sels) == 0 {
+		for _, e := range skipped {
+			if err := finishEntry(m.cfg, e, false); err != nil {
+				m.setStatus(fmt.Sprintf("failed to record skip: %v", err), true)
+				return m, nil
+			}
+		}
+		m.skipped += len(skipped)
+		return m, m.loadGroup(m.groupIdx + 1)
+	}
+
+	m.state = kSubmitting
+	m.setStatus("adding...", false)
+	return m, kindleBatchSubmitCmd(m.cfg, m.sentence, sels, skipped)
 }
 
 // enterEditSentence opens a text input pre-filled with the current
@@ -372,12 +509,12 @@ func (m KindleModel) handleEditSentenceKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 	case "esc":
 		m.sentenceInput.Blur()
 		m.state = kPicking
-		m.setStatus("", false)
+		m.setStatus(m.pickingStatus(), false)
 		return m, nil
 	case "enter":
-		m.applyEditedSentence(m.sentenceInput.Value())
+		cmd := m.applyEditedSentence(m.sentenceInput.Value())
 		m.sentenceInput.Blur()
-		return m, nil
+		return m, cmd
 	case "ctrl+c":
 		return m, tea.Quit
 	}
@@ -387,40 +524,18 @@ func (m KindleModel) handleEditSentenceKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 }
 
 // applyEditedSentence saves the edit back onto the current sentence group
-// (so every word from this sentence sees it) and reloads the current word
-// against the new text. Word/phrase byte offsets are recomputed fresh via
-// kindle.FindPhrase rather than carried over, so — unlike the YouTube
-// sentence editor — no marks need to be dropped.
-func (m *KindleModel) applyEditedSentence(edited string) {
+// (so every word from this sentence sees it) and rebuilds every phrase
+// against the new text — any phrase extensions made before the edit are
+// lost, since their byte offsets no longer apply.
+func (m *KindleModel) applyEditedSentence(edited string) tea.Cmd {
 	if edited != m.sentence {
 		m.groups[m.groupIdx].Usage = edited
+		m.sentence = edited
+		m.resetPhrasesForSentence()
 	}
-	m.loadWord(m.groupIdx, m.wordIdx)
-}
-
-func (m KindleModel) handleConfirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
-		m.state = kPicking
-		m.setStatus("tab/shift+tab move, v extend to a phrase, enter accept", false)
-		return m, nil
-	case "s":
-		return m, kindleSkipCmd(m.cfg, m.currentEntry())
-	case "enter":
-		if m.defPending {
-			return m, nil
-		}
-		m.state = kSubmitting
-		m.setStatus("adding...", false)
-		phrase := m.sentence[m.selStart:m.selEnd]
-		back := m.definition
-		if back != "" {
-			back = kindle.FormatDefinition(phrase, back)
-		}
-		note := kindle.BuildNote(m.cfg.Deck, m.cfg.Tags, m.currentEntry(), m.sentence, m.selStart, m.selEnd, back)
-		return m, kindleSubmitCmd(m.cfg, m.currentEntry(), note)
-	}
-	return m, nil
+	m.state = kPicking
+	m.setStatus(m.pickingStatus(), false)
+	return m.refreshDefinitions()
 }
 
 func (m KindleModel) View() string {
@@ -428,16 +543,14 @@ func (m KindleModel) View() string {
 		return fmt.Sprintf("\ndone: %d added, %d already in Anki, %d skipped\n\npress enter to exit\n", m.added, m.duplicates, m.skipped)
 	}
 
-	e := m.currentEntry()
-	header := titleStyle.Render(fmt.Sprintf("ankindle review — %d/%d", m.flatPosition(), m.totalWords()))
-	if e.BookTitle != "" {
-		header += "  " + helpStyle.Render(e.BookTitle)
+	group := m.groups[m.groupIdx]
+	header := titleStyle.Render(fmt.Sprintf("ankindle review — sentence %d/%d", m.groupIdx+1, len(m.groups)))
+	if len(group.Entries) > 0 && group.Entries[0].BookTitle != "" {
+		header += "  " + helpStyle.Render(group.Entries[0].BookTitle)
 	}
 
 	var body string
 	switch m.state {
-	case kConfirm, kSubmitting:
-		body = m.renderKindleConfirm()
 	case kEditSentence:
 		body = m.renderKindleEditSentence()
 	default:
@@ -456,26 +569,30 @@ func (m KindleModel) View() string {
 	return header + "\n" + body + "\n" + footer + "\n"
 }
 
-// inOtherRange reports whether [start,end) falls within one of this
-// sentence's other candidate words, so they can be dimly underlined while
-// the current word is highlighted.
-func (m KindleModel) inOtherRange(start, end int) bool {
-	for _, r := range m.otherRanges {
-		if start >= r[0] && end <= r[1] {
-			return true
+// styleForWord returns the style (if any) for the word token at wordPos:
+// the cursor takes priority, then whichever phrase (if any) contains it,
+// styled as included or skipped.
+func (m KindleModel) styleForWord(wordPos int) (lipgloss.Style, bool) {
+	if wordPos == m.wordCursor {
+		return wordCursorStyle, true
+	}
+	for _, p := range m.phrases {
+		if p.mergedInto != -1 {
+			continue
+		}
+		if wordPos >= p.lo && wordPos <= p.hi {
+			if p.included {
+				return markedWordStyle, true
+			}
+			return pendingWordStyle, true
 		}
 	}
-	return false
+	return lipgloss.Style{}, false
 }
 
 func (m KindleModel) renderKindlePicker() string {
 	if m.sentence == "" {
 		return "\n" + helpStyle.Render("no usage sentence recorded for this lookup") + "\n"
-	}
-
-	selLo, selHi := -1, -1
-	if m.state == kVisual {
-		selLo, selHi = m.visualLo, m.visualHi
 	}
 
 	var b strings.Builder
@@ -484,19 +601,33 @@ func (m KindleModel) renderKindlePicker() string {
 		text := m.sentence[t.start:t.end]
 		if t.isWord {
 			wordPos++
-		}
-		switch {
-		case t.isWord && wordPos == m.wordCursor:
-			text = wordCursorStyle.Render(text)
-		case t.isWord && selLo != -1 && wordPos >= selLo && wordPos <= selHi:
-			text = selectedLineStyle.Render(text)
-		case m.selStart >= 0 && t.start >= m.selStart && t.end <= m.selEnd:
-			text = markedWordStyle.Render(text)
-		case t.isWord && m.inOtherRange(t.start, t.end):
-			text = pendingWordStyle.Render(text)
+			if style, ok := m.styleForWord(wordPos); ok {
+				text = style.Render(text)
+			}
 		}
 		b.WriteString(text)
 	}
+
+	if m.cfg.Dict != nil {
+		b.WriteString("\n\n")
+		for _, p := range m.phrases {
+			if p.mergedInto != -1 || !p.included {
+				continue
+			}
+			phrase := m.sentence[m.tokens[m.wordTokens[p.lo]].start:m.tokens[m.wordTokens[p.hi]].end]
+			switch {
+			case p.defPending:
+				fmt.Fprintf(&b, "%s: looking up...\n", phrase)
+			case p.defErr != nil:
+				fmt.Fprintf(&b, "%s: lookup failed (%v)\n", phrase, p.defErr)
+			case p.definition == "":
+				fmt.Fprintf(&b, "%s: (none)\n", phrase)
+			default:
+				fmt.Fprintf(&b, "%s: %s\n", phrase, p.definition)
+			}
+		}
+	}
+
 	return "\n" + b.String() + "\n"
 }
 
@@ -504,100 +635,86 @@ func (m KindleModel) renderKindleEditSentence() string {
 	return "\n" + helpStyle.Render("fix typos in the sentence, then confirm — applies to every word from this sentence") + "\n\n" + m.sentenceInput.View() + "\n"
 }
 
-func (m KindleModel) renderKindleConfirm() string {
-	var b strings.Builder
-	b.WriteString("\n")
-	if m.selStart >= 0 {
-		b.WriteString(m.sentence[:m.selStart])
-		b.WriteString(markedWordStyle.Render(m.sentence[m.selStart:m.selEnd]))
-		b.WriteString(m.sentence[m.selEnd:])
-	} else {
-		b.WriteString(m.sentence)
-	}
-	b.WriteString("\n\n")
-
-	phrase := m.currentEntry().Word
-	if m.selStart >= 0 {
-		phrase = m.sentence[m.selStart:m.selEnd]
-	}
-	b.WriteString(fmt.Sprintf("headword: %s\n", phrase))
-
-	switch {
-	case m.defPending:
-		b.WriteString("definition: looking up...\n")
-	case m.defErr != nil:
-		b.WriteString(fmt.Sprintf("definition: lookup failed (%v)\n", m.defErr))
-	case m.definition == "":
-		b.WriteString("definition: (none)\n")
-	default:
-		b.WriteString(fmt.Sprintf("definition: %s\n", m.definition))
-	}
-
-	if m.state == kSubmitting {
-		b.WriteString("\nsubmitting...\n")
-	}
-	return b.String()
-}
-
 func (m KindleModel) helpText() string {
 	switch m.state {
-	case kVisual:
-		return "tab grow right  shift+tab grow left  enter accept  esc cancel  q quit"
+	case kExpanding:
+		return "tab grow right  shift+tab grow left  enter confirm  esc cancel"
 	case kEditSentence:
 		return "enter confirm edit  esc cancel"
-	case kConfirm, kSubmitting:
-		return "enter add  esc adjust selection  s skip  q quit"
+	case kSubmitting:
+		return "submitting..."
 	default:
-		return "tab/shift+tab move  v extend to a phrase  e edit sentence  enter accept  s skip  q quit"
+		return "tab/shift+tab move  v expand nearest word  s toggle skip  e edit sentence  enter add all  q quit"
 	}
 }
 
+// kindleDefResultMsg carries a definition lookup result back for the phrase
+// at idx, tagged with the text it was fetched for (text) so a stale result
+// for a phrase that's since changed can be ignored.
 type kindleDefResultMsg struct {
+	idx        int
+	text       string
 	definition string
 	err        error
 }
 
-func kindleDefCmd(p dict.Provider, phrase, sentence string) tea.Cmd {
+func kindleDefCmd(p dict.Provider, phrase, sentence string, idx int, text string) tea.Cmd {
 	return func() tea.Msg {
 		def, err := p.Define(phrase, sentence)
-		return kindleDefResultMsg{definition: def, err: err}
+		return kindleDefResultMsg{idx: idx, text: text, definition: def, err: err}
 	}
 }
 
-type kindleSubmitResultMsg struct {
-	duplicate bool
-	err       error
+type kindleBatchSubmitResultMsg struct {
+	added, duplicates, skipped int
+	err                        error
 }
 
-// kindleSubmitCmd adds note to Anki (skipping if a note for this phrase
-// already exists in the deck), then advances the sync watermark and, if
-// configured, marks the word Mastered in vocab.db.
-func kindleSubmitCmd(cfg KindleConfig, e kindle.Entry, note anki.Note) tea.Cmd {
+// kindleBatchSubmitCmd adds one note per selection to Anki (skipping any
+// whose phrase already has a note in the deck), advancing the sync
+// watermark and, if configured, marking each word Mastered in vocab.db as
+// it's added — then does the same (without adding a note) for every
+// explicitly skipped entry, so the watermark advances past those too.
+func kindleBatchSubmitCmd(cfg KindleConfig, sentence string, sels []kindleSelection, skipped []kindle.Entry) tea.Cmd {
 	return func() tea.Msg {
 		if err := cfg.AnkiClient.CreateDeck(cfg.Deck); err != nil {
-			return kindleSubmitResultMsg{err: err}
+			return kindleBatchSubmitResultMsg{err: err}
 		}
 
-		_, err := cfg.AnkiClient.AddNote(note)
-		duplicate := errors.Is(err, anki.ErrDuplicate)
-		if err != nil && !duplicate {
-			return kindleSubmitResultMsg{err: err}
+		var added, duplicates int
+		for _, sel := range sels {
+			phrase := sentence[sel.start:sel.end]
+			var back string
+			if sel.definition != "" {
+				back = kindle.FormatDefinition(phrase, sel.definition)
+			}
+			note := kindle.BuildNote(cfg.Deck, cfg.Tags, sel.entries[0], sentence, sel.start, sel.end, back)
+
+			_, err := cfg.AnkiClient.AddNote(note)
+			duplicate := errors.Is(err, anki.ErrDuplicate)
+			if err != nil && !duplicate {
+				return kindleBatchSubmitResultMsg{added: added, duplicates: duplicates, err: err}
+			}
+			if duplicate {
+				duplicates++
+			} else {
+				added++
+			}
+
+			for _, e := range sel.entries {
+				if err := finishEntry(cfg, e, true); err != nil {
+					return kindleBatchSubmitResultMsg{added: added, duplicates: duplicates, err: err}
+				}
+			}
 		}
 
-		if err := finishEntry(cfg, e, duplicate || err == nil); err != nil {
-			return kindleSubmitResultMsg{duplicate: duplicate, err: err}
+		for _, e := range skipped {
+			if err := finishEntry(cfg, e, false); err != nil {
+				return kindleBatchSubmitResultMsg{added: added, duplicates: duplicates, skipped: len(skipped), err: err}
+			}
 		}
-		return kindleSubmitResultMsg{duplicate: duplicate}
-	}
-}
 
-type kindleSkipResultMsg struct {
-	err error
-}
-
-func kindleSkipCmd(cfg KindleConfig, e kindle.Entry) tea.Cmd {
-	return func() tea.Msg {
-		return kindleSkipResultMsg{err: finishEntry(cfg, e, false)}
+		return kindleBatchSubmitResultMsg{added: added, duplicates: duplicates, skipped: len(skipped)}
 	}
 }
 

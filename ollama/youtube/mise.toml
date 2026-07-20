@@ -1,3 +1,0 @@
-[tasks.create]
-description = "Create the ankitube Ollama model from Modelfile"
-run = "ollama create ankitube -f Modelfile"
