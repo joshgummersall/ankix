@@ -24,10 +24,9 @@ func (m Model) handleEditSentenceKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.setStatus("", false)
 		return m, nil
 	case "enter":
-		m.applyEditedSentence(m.sentenceInput.Value())
+		cmd := m.applyEditedSentence(m.sentenceInput.Value())
 		m.sentenceInput.Blur()
-		m.state = stateWordPick
-		return m, nil
+		return m, cmd
 	case "ctrl+c":
 		return m, tea.Quit
 	}
@@ -36,22 +35,21 @@ func (m Model) handleEditSentenceKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// applyEditedSentence swaps in the edited sentence. Since editing can shift
-// every byte offset in the sentence, any marks (and their in-flight gloss
-// lookups) are dropped rather than tried to be remapped onto the new text —
-// the word cursor is repositioned as closely as possible by word index
-// instead of byte offset.
-func (m *Model) applyEditedSentence(edited string) {
+// applyEditedSentence swaps in the edited sentence. Editing can shift every
+// byte offset in the sentence, so — unlike Kindle's sentence editor, which
+// can cheaply recompute each known word's position from its lookup text —
+// every phrase here is dropped rather than remapped, since there's no
+// source of truth to recompute them against.
+func (m *Model) applyEditedSentence(edited string) tea.Cmd {
 	if edited == m.sentence {
-		return
+		m.state = stateWordPick
+		m.setStatus("", false)
+		return nil
 	}
-
-	prevWordCursor := m.wordCursor
 
 	m.sentence = edited
 	m.tokens = tokenize(m.sentence)
-	m.markedWords = nil
-	m.glossPending = 0
+	m.phrases = nil
 
 	m.wordTokens = m.wordTokens[:0]
 	for i, t := range m.tokens {
@@ -61,9 +59,7 @@ func (m *Model) applyEditedSentence(edited string) {
 	}
 
 	m.wordCursor = 0
-	if len(m.wordTokens) > 0 {
-		m.wordCursor = min(prevWordCursor, len(m.wordTokens)-1)
-	}
-
+	m.state = stateWordPick
 	m.setStatus("sentence edited — previous word marks were cleared", false)
+	return nil
 }

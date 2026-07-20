@@ -23,8 +23,8 @@ const (
 	stateBrowse state = iota
 	stateVisual
 	stateWordPick
+	stateWordExpand
 	stateEditSentence
-	stateConfirm
 	stateSubmitting
 )
 
@@ -68,9 +68,19 @@ type Model struct {
 	wordTokens    []int // indices into tokens that are words
 	wordCursor    int   // index into wordTokens
 
-	markedWords  []anki.WordSelection // words marked with x, each becomes its own card
-	glossPending int                  // count of in-flight gloss lookups
-	cueStart     time.Duration
+	phrases []wpPhrase // live phrase state for the sentence currently being reviewed, each becomes its own card
+
+	// expandIdx is the phrase currently being grown (valid only in
+	// stateWordExpand); expandOrigLo/Hi is its pre-expansion range,
+	// restored on esc. expandIsNew marks a phrase created by pressing v on
+	// a word with no phrase of its own, so esc can remove it entirely
+	// instead of just reverting its range.
+	expandIdx                  int
+	expandOrigLo, expandOrigHi int
+	expandIsNew                bool
+	debounceGen                int // bumped on every expand-mode edit; a stale debounce fire is ignored
+
+	cueStart time.Duration
 
 	cardedLines map[int]bool // cue indices with at least one submitted card
 
@@ -137,28 +147,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 
-	case glossResultMsg:
-		if m.glossPending > 0 {
-			m.glossPending--
-		}
-		if msg.err != nil {
-			m.setStatus(fmt.Sprintf("gloss lookup failed: %v", msg.err), true)
+	case wpDebounceMsg:
+		if msg.gen != m.debounceGen {
 			return m, nil
 		}
-		for i, s := range m.markedWords {
-			if s.Start == msg.start && s.End == msg.end {
-				m.markedWords[i].Gloss = msg.gloss
-				break
-			}
+		return m, m.refreshGlosses()
+
+	case glossResultMsg:
+		if msg.idx < len(m.phrases) && m.phrases[msg.idx].glossText == msg.text {
+			m.phrases[msg.idx].glossPending = false
+			m.phrases[msg.idx].gloss = msg.gloss
+			m.phrases[msg.idx].glossErr = msg.err
 		}
 		return m, nil
 
 	case submitResultMsg:
-		m.state = stateConfirm
 		switch {
 		case msg.err != nil && msg.added == 0 && msg.duplicates == 0:
-			// Total failure (e.g. Anki isn't running) — stay put so the
-			// selection isn't lost and the user can retry.
+			// Total failure (e.g. Anki isn't running) — stay on the word
+			// picker so the selection isn't lost and the user can retry.
+			m.state = stateWordPick
 			m.setStatus(fmt.Sprintf("failed to add cards: %v", msg.err), true)
 			return m, nil
 		case msg.err != nil:
@@ -196,12 +204,10 @@ func (m Model) View() string {
 
 	var body string
 	switch m.state {
-	case stateWordPick:
+	case stateWordPick, stateWordExpand, stateSubmitting:
 		body = m.renderWordPicker()
 	case stateEditSentence:
 		body = m.renderEditSentence()
-	case stateConfirm, stateSubmitting:
-		body = m.renderConfirm()
 	default:
 		// Content is kept in sync by syncViewport (called from Update, not
 		// here — View has a value receiver, so mutating m.viewport here
@@ -209,7 +215,7 @@ func (m Model) View() string {
 		body = m.viewport.View()
 	}
 
-	if m.state == stateWordPick && m.width > 0 {
+	if (m.state == stateWordPick || m.state == stateWordExpand || m.state == stateSubmitting) && m.width > 0 {
 		body = lipgloss.NewStyle().Width(m.width).Render(body)
 	}
 
@@ -233,11 +239,13 @@ func (m Model) helpText() string {
 	case stateVisual:
 		return "tab/shift+tab extend by word  j/k extend by line  enter complete selection  esc cancel"
 	case stateWordPick:
-		return "tab/shift+tab move  x mark word  e edit sentence  enter confirm  esc cancel"
+		return "tab/shift+tab move  v expand/add word  d delete word  e edit sentence  enter add all  esc cancel"
+	case stateWordExpand:
+		return "tab grow right  shift+tab grow left  enter confirm  esc cancel"
 	case stateEditSentence:
 		return "enter save  esc discard changes"
-	case stateConfirm:
-		return "enter submit  esc back to word picker"
+	case stateSubmitting:
+		return "submitting..."
 	default:
 		return "tab/shift+tab word  j/k line  gg/G top/bottom  x start selection  / search  enter confirm  ? help  q quit"
 	}

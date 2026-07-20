@@ -53,43 +53,62 @@ func TestWordPick_ShiftTabMovesCursorBack(t *testing.T) {
 	}
 }
 
-func TestWordPick_XMarksCurrentWord(t *testing.T) {
+// activePhraseCount counts phrases that will actually be added as cards:
+// standalone (not merged into another) and not deleted.
+func activePhraseCount(m Model) int {
+	n := 0
+	for _, p := range m.phrases {
+		if p.mergedInto == -1 && !p.deleted {
+			n++
+		}
+	}
+	return n
+}
+
+func TestWordPick_VMarksCurrentWord(t *testing.T) {
 	m := newTestWordPickModel(t, "la casa vieja")
 
 	mi, _ := m.Update(key("tab")) // move to "casa"
 	m = mi.(Model)
-	mi, _ = m.Update(key("x"))
+	mi, _ = m.Update(key("v")) // start expanding a new phrase for "casa"
+	m = mi.(Model)
+	mi, _ = m.Update(key("enter")) // confirm it without extending
 	m = mi.(Model)
 
-	if len(m.markedWords) != 1 {
-		t.Fatalf("expected 1 marked word, got %d", len(m.markedWords))
+	if got := activePhraseCount(m); got != 1 {
+		t.Fatalf("expected 1 marked word, got %d", got)
 	}
-	got := m.sentence[m.markedWords[0].Start:m.markedWords[0].End]
+	p := m.phrases[0]
+	got := m.sentence[m.tokens[m.wordTokens[p.lo]].start:m.tokens[m.wordTokens[p.hi]].end]
 	if got != "casa" {
 		t.Errorf("marked word text = %q, want %q", got, "casa")
 	}
 
-	// x again on the same word unmarks it.
-	mi, _ = m.Update(key("x"))
+	// d on the same word deletes it.
+	mi, _ = m.Update(key("d"))
 	m = mi.(Model)
-	if len(m.markedWords) != 0 {
-		t.Errorf("expected word to be unmarked, got %d marked", len(m.markedWords))
+	if got := activePhraseCount(m); got != 0 {
+		t.Errorf("expected word to be deleted, got %d marked", got)
 	}
 }
 
-func TestWordPick_MultipleXMarksMultipleWords(t *testing.T) {
+func TestWordPick_MultipleVMarksMultipleWords(t *testing.T) {
 	m := newTestWordPickModel(t, "la casa vieja")
 
-	mi, _ := m.Update(key("x")) // mark "la"
+	mi, _ := m.Update(key("v")) // mark "la"
+	m = mi.(Model)
+	mi, _ = m.Update(key("enter"))
 	m = mi.(Model)
 	mi, _ = m.Update(key("tab"))
 	m = mi.(Model)
 	mi, _ = m.Update(key("tab"))
 	m = mi.(Model)
-	mi, _ = m.Update(key("x")) // mark "vieja"
+	mi, _ = m.Update(key("v")) // mark "vieja"
+	m = mi.(Model)
+	mi, _ = m.Update(key("enter"))
 	m = mi.(Model)
 
-	if len(m.markedWords) != 2 {
-		t.Fatalf("expected 2 marked words, got %d", len(m.markedWords))
+	if got := activePhraseCount(m); got != 2 {
+		t.Fatalf("expected 2 marked words, got %d", got)
 	}
 }

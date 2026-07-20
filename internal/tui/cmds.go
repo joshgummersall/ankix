@@ -9,10 +9,14 @@ import (
 	"github.com/joshgummersall/ankix/internal/translate"
 )
 
+// glossResultMsg carries a gloss lookup result back for the phrase at idx,
+// tagged with the text it was fetched for (text) so a stale result for a
+// phrase that's since changed can be ignored.
 type glossResultMsg struct {
-	start, end int // byte offsets identifying which marked word this gloss is for
-	gloss      string
-	err        error
+	idx   int
+	text  string
+	gloss string
+	err   error
 }
 
 type submitResultMsg struct {
@@ -21,10 +25,10 @@ type submitResultMsg struct {
 	err        error // first non-duplicate error encountered, if any
 }
 
-func fetchGlossCmd(p translate.Provider, word, sentence string, start, end int) tea.Cmd {
+func fetchGlossCmd(p translate.Provider, word, sentence string, idx int, text string) tea.Cmd {
 	return func() tea.Msg {
 		gloss, err := p.Gloss(word, sentence)
-		return glossResultMsg{start: start, end: end, gloss: gloss, err: err}
+		return glossResultMsg{idx: idx, text: text, gloss: gloss, err: err}
 	}
 }
 

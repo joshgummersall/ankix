@@ -24,10 +24,13 @@ var (
 	wordCursorStyle = lipgloss.NewStyle().Reverse(true).Bold(true)
 	markedWordStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.AdaptiveColor{Light: "130", Dark: "214"}).Bold(true)
-	pendingWordStyle = lipgloss.NewStyle().Underline(true).
-				Foreground(lipgloss.AdaptiveColor{Light: "243", Dark: "246"})
-	titleStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.AdaptiveColor{Light: "25", Dark: "39"}).Bold(true)
+	// markedWordCursorStyle is markedWordStyle plus an underline, used for
+	// the cursor's exact position within a marked phrase — the whole
+	// phrase still reads as one colored block, with the underline as the
+	// only cue for where the cursor sits inside it.
+	markedWordCursorStyle = markedWordStyle.Underline(true)
+	titleStyle            = lipgloss.NewStyle().
+				Foreground(lipgloss.AdaptiveColor{Light: "25", Dark: "39"}).Bold(true)
 	helpKeyStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.AdaptiveColor{Light: "130", Dark: "214"}).Bold(true)
 	helpPopoverStyle = lipgloss.NewStyle().
