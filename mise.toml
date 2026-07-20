@@ -22,6 +22,11 @@ run = "go vet ./..."
 description = "Remove build artifacts"
 run = "rm -rf bin"
 
+[tasks.install]
+description = "Build ankix and install it to ~/.local/bin"
+depends = ["build"]
+run = "mkdir -p ~/.local/bin && cp bin/ankix ~/.local/bin/ankix"
+
 [tasks.setup]
 description = "Scaffold local dev environment for both commands (installs deps, creates the shared ankindle Ollama model)"
 dir = "ollama/vocab"
