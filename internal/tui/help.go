@@ -18,6 +18,7 @@ var helpBindings = [][2]string{
 	{"enter", "complete selection → mark words for cards"},
 	{"tab / shift+tab (word pick)", "move the word cursor"},
 	{"x (word pick)", "mark/unmark current word — each becomes its own card"},
+	{"e (word pick)", "edit the sentence to fix typos before marking words"},
 	{"esc", "cancel / back out"},
 	{"?", "toggle this help"},
 	{"q, ctrl+c", "quit"},

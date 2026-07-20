@@ -31,6 +31,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleBrowseKey(msg)
 	case stateWordPick:
 		return m.handleWordPickKey(msg)
+	case stateEditSentence:
+		return m.handleEditSentenceKey(msg)
 	case stateConfirm:
 		return m.handleConfirmKey(msg)
 	}

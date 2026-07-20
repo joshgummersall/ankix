@@ -21,6 +21,7 @@ const (
 	stateBrowse state = iota
 	stateVisual
 	stateWordPick
+	stateEditSentence
 	stateConfirm
 	stateSubmitting
 )
@@ -59,10 +60,11 @@ type Model struct {
 
 	selWordStart, selWordEnd int // confirmed word selection, inclusive
 
-	sentence   string
-	tokens     []token
-	wordTokens []int // indices into tokens that are words
-	wordCursor int   // index into wordTokens
+	sentence      string
+	sentenceInput textinput.Model // pre-filled with sentence while editing, for fixing transcript typos
+	tokens        []token
+	wordTokens    []int // indices into tokens that are words
+	wordCursor    int   // index into wordTokens
 
 	markedWords  []anki.WordSelection // words marked with x, each becomes its own card
 	glossPending int                  // count of in-flight gloss lookups
@@ -78,6 +80,10 @@ func New(cfg Config) Model {
 	si := textinput.New()
 	si.Prompt = "/"
 
+	sei := textinput.New()
+	sei.Prompt = "edit: "
+	sei.Width = 120
+
 	words := subtitle.FlattenWords(cfg.Transcript.Cues)
 	cueFirstWord := make([]int, len(cfg.Transcript.Cues))
 	last := -1
@@ -89,13 +95,14 @@ func New(cfg Config) Model {
 	}
 
 	return Model{
-		cfg:          cfg,
-		state:        stateBrowse,
-		searchInput:  si,
-		cardedLines:  make(map[int]bool),
-		words:        words,
-		cueFirstWord: cueFirstWord,
-		status:       fmt.Sprintf("%d lines loaded — tab/shift+tab word, j/k line, x select, enter confirm, q quit", len(cfg.Transcript.Cues)),
+		cfg:           cfg,
+		state:         stateBrowse,
+		searchInput:   si,
+		sentenceInput: sei,
+		cardedLines:   make(map[int]bool),
+		words:         words,
+		cueFirstWord:  cueFirstWord,
+		status:        fmt.Sprintf("%d lines loaded — tab/shift+tab word, j/k line, x select, enter confirm, q quit", len(cfg.Transcript.Cues)),
 	}
 }
 
@@ -186,6 +193,8 @@ func (m Model) View() string {
 	switch m.state {
 	case stateWordPick:
 		body = m.renderWordPicker()
+	case stateEditSentence:
+		body = m.renderEditSentence()
 	case stateConfirm, stateSubmitting:
 		body = m.renderConfirm()
 	default:
@@ -215,7 +224,9 @@ func (m Model) helpText() string {
 	case stateVisual:
 		return "tab/shift+tab extend by word  j/k extend by line  enter complete selection  esc cancel"
 	case stateWordPick:
-		return "tab/shift+tab move  x mark word  enter confirm  esc cancel"
+		return "tab/shift+tab move  x mark word  e edit sentence  enter confirm  esc cancel"
+	case stateEditSentence:
+		return "enter save  esc discard changes"
 	case stateConfirm:
 		return "enter submit  esc back to word picker"
 	default:

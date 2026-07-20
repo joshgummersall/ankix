@@ -85,6 +85,9 @@ func (m Model) handleWordPickKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.wordCursor--
 		}
 		return m, nil
+	case "e":
+		m.enterEditSentence()
+		return m, nil
 	case "x":
 		if len(m.wordTokens) == 0 {
 			return m, nil
@@ -112,6 +115,10 @@ func (m Model) handleWordPickKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 	return m, nil
+}
+
+func (m Model) renderEditSentence() string {
+	return "\n" + helpStyle.Render("fix typos in the sentence, then confirm") + "\n\n" + m.sentenceInput.View() + "\n"
 }
 
 func (m Model) renderWordPicker() string {
