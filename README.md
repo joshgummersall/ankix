@@ -20,7 +20,7 @@ mise run setup       # creates the Ollama model
 ## `ankix kindle` — Kindle vocabulary builder
 
 ```
-ankix kindle vocab --db ~/Documents/vocab.db --lang en --deck "Kindle Vocab"
+ankix kindle vocab ~/Documents/vocab.db --lang en --deck "Kindle Vocab"
 ```
 
 Find `vocab.db` on your Kindle at `system/vocabulary/vocab.db`, or in a
@@ -30,9 +30,10 @@ Each note uses Anki's built-in `Basic` note type: `Front` is the highlighted
 sentence from the book with the looked-up word in **bold**; `Back` is the
 definition.
 
+Positional argument: path to `vocab.db`.
+
 Flags:
 
-- `--db` — path to vocab.db (required)
 - `--lang` — language prefix to filter words by, e.g. `en`, `es` (default `en`)
 - `--deck` — Anki deck to sync into (default `Kindle Vocab`)
 - `--model` — Ollama model used to define words (default `ankindle`)
@@ -41,7 +42,7 @@ Flags:
 - `--mastered` — filter out words already marked Mastered in `vocab.db`
   from this sync (by default they're included), and mark words that end
   up in Anki as Mastered (sets `WORDS.category` to `1`), removing them
-  from the Kindle's Vocabulary Builder review queue. Opens `--db`
+  from the Kindle's Vocabulary Builder review queue. Opens `vocab.db`
   read-write, so point it at the device itself rather than a copy if you
   want the change to take effect on the device. Before writing anything,
   `vocab.db` is copied to `vocab.db.bak` alongside it.

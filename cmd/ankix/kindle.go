@@ -46,25 +46,25 @@ func newKindleVocabCmd() *cobra.Command {
 	o := &syncOptions{}
 
 	cmd := &cobra.Command{
-		Use:   "vocab",
+		Use:   "vocab <vocab.db>",
 		Short: "Read vocab.db and sync new words to Anki via AnkiConnect",
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			o.dbPath = args[0]
 			return runSync(o)
 		},
 	}
 
-	cmd.Flags().StringVar(&o.dbPath, "db", "", "path to Kindle vocab.db (required)")
 	cmd.Flags().StringVar(&o.lang, "lang", "en", "language prefix to filter words by, matched against the dictionary used for each lookup (e.g. en, es); empty for all")
 	cmd.Flags().StringVar(&o.deck, "deck", "Kindle Vocab", "Anki deck name to sync into")
 	cmd.Flags().StringVar(&o.ankiURL, "ankiconnect-url", "http://localhost:8765", "AnkiConnect endpoint")
 	cmd.Flags().StringSliceVar(&o.tags, "tag", []string{anki.SourceTag("Kindle")}, "tags to apply to new notes")
 	cmd.Flags().BoolVar(&o.dryRun, "dry-run", false, "print what would be synced without writing to Anki (only applies with --headless; the interactive review lets you inspect/skip each word before it's added)")
-	cmd.Flags().BoolVar(&o.mastered, "mastered", false, "filter out words already marked Mastered in vocab.db (default: include them), and mark words that end up in Anki as Mastered (opens --db read-write)")
+	cmd.Flags().BoolVar(&o.mastered, "mastered", false, "filter out words already marked Mastered in vocab.db (default: include them), and mark words that end up in Anki as Mastered (opens vocab.db read-write)")
 	cmd.Flags().BoolVar(&o.full, "full", false, "ignore the sync watermark stored in vocab.db and consider every lookup again")
 	cmd.Flags().StringVar(&o.model, "model", "ankindle", "Ollama model to use")
 	cmd.Flags().IntVar(&o.limit, "limit", 0, "limit to the N most recently looked-up words (0 for no limit)")
 	cmd.Flags().BoolVar(&o.headless, "headless", false, "sync every word straight through without the interactive review TUI (e.g. for cron/automation)")
-	cmd.MarkFlagRequired("db")
 
 	return cmd
 }
