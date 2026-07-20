@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -668,31 +669,6 @@ func (m KindleModel) View() string {
 	return header + "\n" + body + "\n" + footer + "\n"
 }
 
-// styleForWord returns the style (if any) for the word token at wordPos.
-// A word that's part of a non-deleted phrase always renders as part of
-// that phrase's block, even if the cursor sits on it — an underline marks
-// exactly where the cursor is within the block, rather than swapping that
-// one word to the plain cursor style, which would visually split the
-// phrase in two. Deleted words get no style at all, so they render
-// indistinguishably from a word that was never selected.
-func (m KindleModel) styleForWord(wordPos int) (lipgloss.Style, bool) {
-	for _, p := range m.phrases {
-		if p.mergedInto != -1 || p.deleted {
-			continue
-		}
-		if wordPos >= p.lo && wordPos <= p.hi {
-			if wordPos == m.wordCursor {
-				return markedWordCursorStyle, true
-			}
-			return markedWordStyle, true
-		}
-	}
-	if wordPos == m.wordCursor {
-		return wordCursorStyle, true
-	}
-	return lipgloss.Style{}, false
-}
-
 func (m KindleModel) renderKindlePicker() string {
 	if m.sentence == "" {
 		return "\n" + helpStyle.Render("no usage sentence recorded for this lookup") + "\n"
@@ -700,12 +676,19 @@ func (m KindleModel) renderKindlePicker() string {
 
 	var b strings.Builder
 	wordPos := -1
+	lastPhrase, toggle := -1, false
 	for _, t := range m.tokens {
 		text := m.sentence[t.start:t.end]
 		if t.isWord {
 			wordPos++
-			if style, ok := m.styleForWord(wordPos); ok {
-				text = style.Render(text)
+			if i, ok := m.phraseAt(wordPos); ok {
+				if i != lastPhrase {
+					toggle = !toggle
+					lastPhrase = i
+				}
+				text = phraseStyle(toggle, wordPos == m.wordCursor).Render(text)
+			} else if wordPos == m.wordCursor {
+				text = wordCursorStyle.Render(text)
 			}
 		}
 		b.WriteString(text)
@@ -713,7 +696,10 @@ func (m KindleModel) renderKindlePicker() string {
 
 	if m.cfg.Dict != nil {
 		b.WriteString("\n\n")
-		for _, p := range m.phrases {
+		ordered := make([]kindlePhrase, len(m.phrases))
+		copy(ordered, m.phrases)
+		sort.Slice(ordered, func(i, j int) bool { return ordered[i].lo < ordered[j].lo })
+		for _, p := range ordered {
 			if p.mergedInto != -1 || p.deleted {
 				continue
 			}

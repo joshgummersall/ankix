@@ -14,7 +14,7 @@ var helpBindings = [][2]string{
 	{"G", "jump to last word"},
 	{"/", "search transcript"},
 	{"n / N", "next / previous match"},
-	{"x", "start a sentence selection"},
+	{"v", "start a sentence selection"},
 	{"enter", "complete selection → mark words for cards"},
 	{"tab / shift+tab (word pick)", "move the word cursor"},
 	{"v (word pick)", "expand/add the word under the cursor as a phrase"},

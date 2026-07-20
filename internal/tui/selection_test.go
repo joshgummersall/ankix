@@ -64,7 +64,7 @@ func TestWordSelection_SpansAcrossLineBoundary(t *testing.T) {
 	}
 }
 
-func TestWordSelection_TabMovesAndXStartsSelection(t *testing.T) {
+func TestWordSelection_TabMovesAndVStartsSelection(t *testing.T) {
 	cues := []subtitle.Cue{{Text: "la casa vieja de mi abuela"}}
 	m := New(Config{Transcript: &subtitle.Transcript{Cues: cues}})
 	mi, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
@@ -78,10 +78,10 @@ func TestWordSelection_TabMovesAndXStartsSelection(t *testing.T) {
 		t.Fatalf("cursorWord = %d, want 2 (tab should move forward by word)", m.cursorWord)
 	}
 
-	mi, _ = m.Update(key("x"))
+	mi, _ = m.Update(key("v"))
 	m = mi.(Model)
 	if m.state != stateVisual {
-		t.Fatalf("state = %v, want stateVisual (x should start a selection)", m.state)
+		t.Fatalf("state = %v, want stateVisual (v should start a selection)", m.state)
 	}
 
 	mi, _ = m.Update(key("tab"))

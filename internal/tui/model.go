@@ -50,9 +50,14 @@ type Model struct {
 	words        []subtitle.Word // every word in the transcript, in order, tagged with its source line
 	cueFirstWord []int           // cueFirstWord[i] = index into words of cue i's first word
 
-	cursorWord       int
-	visualAnchorWord int
-	pendingG         bool
+	cursorWord int
+	pendingG   bool
+
+	// visualLo/Hi are the independent word-index boundaries of the
+	// in-progress transcript selection (stateVisual), grown one at a time
+	// by tab/shift+tab (word) and j/k (line) — mirrors the v/tab/shift+tab
+	// phrase-expansion UX used once inside word pick.
+	visualLo, visualHi int
 
 	searching   bool
 	searchInput textinput.Model
@@ -116,7 +121,7 @@ func New(cfg Config) Model {
 		cardedLines:   make(map[int]bool),
 		words:         words,
 		cueFirstWord:  cueFirstWord,
-		status:        fmt.Sprintf("%d lines loaded — tab/shift+tab word, j/k line, x select, enter confirm, q quit", len(cfg.Transcript.Cues)),
+		status:        fmt.Sprintf("%d lines loaded — tab/shift+tab word, j/k line, v select, enter confirm, q quit", len(cfg.Transcript.Cues)),
 	}
 }
 
@@ -247,6 +252,6 @@ func (m Model) helpText() string {
 	case stateSubmitting:
 		return "submitting..."
 	default:
-		return "tab/shift+tab word  j/k line  gg/G top/bottom  x start selection  / search  enter confirm  ? help  q quit"
+		return "tab/shift+tab word  j/k line  gg/G top/bottom  v start selection  / search  enter confirm  ? help  q quit"
 	}
 }

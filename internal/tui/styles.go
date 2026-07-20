@@ -22,14 +22,24 @@ var (
 	helpStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.AdaptiveColor{Light: "243", Dark: "240"})
 	wordCursorStyle = lipgloss.NewStyle().Reverse(true).Bold(true)
-	markedWordStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.AdaptiveColor{Light: "130", Dark: "214"}).Bold(true)
-	// markedWordCursorStyle is markedWordStyle plus an underline, used for
-	// the cursor's exact position within a marked phrase — the whole
-	// phrase still reads as one colored block, with the underline as the
-	// only cue for where the cursor sits inside it.
-	markedWordCursorStyle = markedWordStyle.Underline(true)
-	titleStyle            = lipgloss.NewStyle().
+	// markedWordStyleA/B alternate between adjacent, separately-selected
+	// phrases so two cards sitting right next to each other in the
+	// sentence (e.g. "jamás" then "hayas oído") are visually distinct
+	// instead of blurring into what looks like one longer phrase. Each is
+	// a solid background block with an explicit high-contrast foreground
+	// (not left to the terminal's default) so it reads clearly regardless
+	// of theme. markedWordCursorStyleA/B mark the cursor's exact position
+	// within a phrase by reversing that block's own colors, rather than
+	// underlining — still a colored block, just inverted.
+	markedWordStyleA = lipgloss.NewStyle().
+				Background(lipgloss.AdaptiveColor{Light: "215", Dark: "208"}).
+				Foreground(lipgloss.Color("0")).Bold(true)
+	markedWordStyleB = lipgloss.NewStyle().
+				Background(lipgloss.AdaptiveColor{Light: "51", Dark: "37"}).
+				Foreground(lipgloss.Color("0")).Bold(true)
+	markedWordCursorStyleA = markedWordStyleA.Reverse(true)
+	markedWordCursorStyleB = markedWordStyleB.Reverse(true)
+	titleStyle             = lipgloss.NewStyle().
 				Foreground(lipgloss.AdaptiveColor{Light: "25", Dark: "39"}).Bold(true)
 	helpKeyStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.AdaptiveColor{Light: "130", Dark: "214"}).Bold(true)

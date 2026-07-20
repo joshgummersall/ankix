@@ -65,15 +65,47 @@ func (m Model) handleBrowseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.syncViewport()
 		return m, nil
 	case "l", "right", "tab":
+		if m.state == stateVisual {
+			if m.visualHi < len(m.words)-1 {
+				m.visualHi++
+			}
+			m.cursorWord = m.visualHi
+			m.syncViewport()
+			return m, nil
+		}
 		m.moveCursorWord(1)
 		return m, nil
 	case "h", "left", "shift+tab":
+		if m.state == stateVisual {
+			if m.visualLo > 0 {
+				m.visualLo--
+			}
+			m.cursorWord = m.visualLo
+			m.syncViewport()
+			return m, nil
+		}
 		m.moveCursorWord(-1)
 		return m, nil
 	case "j", "down":
+		if m.state == stateVisual {
+			if line := m.lineOfWord(m.visualHi) + 1; line <= len(m.cueFirstWord)-1 {
+				m.visualHi = m.cueFirstWord[line]
+			}
+			m.cursorWord = m.visualHi
+			m.syncViewport()
+			return m, nil
+		}
 		m.moveCursorLine(1)
 		return m, nil
 	case "k", "up":
+		if m.state == stateVisual {
+			if line := m.lineOfWord(m.visualLo) - 1; line >= 0 {
+				m.visualLo = m.cueFirstWord[line]
+			}
+			m.cursorWord = m.visualLo
+			m.syncViewport()
+			return m, nil
+		}
 		m.moveCursorLine(-1)
 		return m, nil
 	case "g":
@@ -94,18 +126,18 @@ func (m Model) handleBrowseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "N":
 		m.jumpToNextMatch(-1)
 		return m, nil
-	case "v", "x":
+	case "v":
 		if m.state == stateVisual {
 			m.state = stateBrowse
 		} else {
 			m.state = stateVisual
-			m.visualAnchorWord = m.cursorWord
+			m.visualLo, m.visualHi = m.cursorWord, m.cursorWord
 		}
 		m.syncViewport()
 		return m, nil
 	case "enter":
 		if m.state == stateVisual {
-			m.selWordStart, m.selWordEnd = minMax(m.visualAnchorWord, m.cursorWord)
+			m.selWordStart, m.selWordEnd = m.visualLo, m.visualHi
 		} else {
 			m.selWordStart, m.selWordEnd = m.cursorWord, m.cursorWord
 		}
@@ -141,10 +173,14 @@ func (m *Model) moveCursorLine(delta int) {
 }
 
 func (m Model) lineOfCursor() int {
+	return m.lineOfWord(m.cursorWord)
+}
+
+func (m Model) lineOfWord(wi int) int {
 	if len(m.words) == 0 {
 		return 0
 	}
-	return m.words[m.cursorWord].CueIndex
+	return m.words[wi].CueIndex
 }
 
 // syncViewport refreshes the viewport's content (cursor/selection highlight
@@ -203,13 +239,6 @@ func (m Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func minMax(a, b int) (int, int) {
-	if a > b {
-		return b, a
-	}
-	return a, b
-}
-
 func (m Model) renderTranscript() string {
 	var b strings.Builder
 	cues := m.cfg.Transcript.Cues
@@ -217,7 +246,7 @@ func (m Model) renderTranscript() string {
 
 	selLo, selHi := -1, -1
 	if m.state == stateVisual {
-		selLo, selHi = minMax(m.visualAnchorWord, m.cursorWord)
+		selLo, selHi = m.visualLo, m.visualHi
 	}
 
 	for i, c := range cues {
