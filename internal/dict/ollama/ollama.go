@@ -1,5 +1,5 @@
 // Package ollama defines vocab words (and, via the translate adapter, glosses
-// subtitle words) by asking a local "ankindle" Ollama model (see
+// subtitle words) by asking a local "ankix" Ollama model (see
 // ollama/vocab/Modelfile) for a contextual translation and dictionary lemma
 // of a word as used in a sentence. The model's system prompt and few-shot
 // examples are baked into the Modelfile itself, so this package only needs
@@ -18,7 +18,7 @@ import (
 // ollama/Modelfile.
 type Provider struct {
 	URL        string // e.g. "http://localhost:11434"
-	Model      string // e.g. "ankindle"
+	Model      string // e.g. "ankix"
 	HTTPClient *http.Client
 }
 

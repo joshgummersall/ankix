@@ -36,22 +36,14 @@ const (
 type KindleConfig struct {
 	Entries []kindle.Entry // one per word, most-recently-looked-up first
 
-	// MaxLookupTimestamp is the newest LOOKUPS.timestamp seen across every
-	// lookup of a word (keyed by strings.ToLower(word)), even though only
-	// one Entry per word is reviewed. The sync watermark advances to this
-	// value once a word has been reviewed, whether or not a card was added.
-	MaxLookupTimestamp map[string]int64
-
 	Deck       string
 	Tags       []string
 	AnkiClient *anki.Client
 	Dict       dict.Provider // nil disables definition lookups
 
-	// DB, if non-nil, is a read-write vocab.db handle used to persist the
-	// sync watermark after each reviewed word and, with Mastered, to mark
-	// synced words as Mastered.
-	DB       *sql.DB
-	Mastered bool
+	// DB, if non-nil, is a read-write vocab.db handle used to mark synced
+	// words as Mastered.
+	DB *sql.DB
 }
 
 // kindlePhrase is the live, editable word/phrase for one entry in the
@@ -543,10 +535,9 @@ func (m KindleModel) handleExpandingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // submitGroup builds a card for every included phrase in the current
-// sentence and submits them all in one action, and records a skip for
-// every excluded entry so the sync watermark still advances past it. Merged
-// phrases contribute every entry they absorbed to whichever single card
-// their merged range produces.
+// sentence and submits them all in one action. Merged phrases contribute
+// every entry they absorbed to whichever single card their merged range
+// produces.
 func (m KindleModel) submitGroup() (tea.Model, tea.Cmd) {
 	for _, p := range m.phrases {
 		if p.mergedInto == -1 && !p.deleted && p.defPending {
@@ -577,12 +568,6 @@ func (m KindleModel) submitGroup() (tea.Model, tea.Cmd) {
 	}
 
 	if len(sels) == 0 {
-		for _, e := range skipped {
-			if err := finishEntry(m.cfg, e, false); err != nil {
-				m.setStatus(fmt.Sprintf("failed to record skip: %v", err), true)
-				return m, nil
-			}
-		}
 		m.skipped += len(skipped)
 		return m, m.loadGroup(m.groupIdx + 1)
 	}
@@ -644,7 +629,7 @@ func (m KindleModel) View() string {
 	}
 
 	group := m.groups[m.groupIdx]
-	header := titleStyle.Render(fmt.Sprintf("ankindle review — sentence %d/%d", m.groupIdx+1, len(m.groups)))
+	header := titleStyle.Render(fmt.Sprintf("ankix review — sentence %d/%d", m.groupIdx+1, len(m.groups)))
 	if len(group.Entries) > 0 && group.Entries[0].BookTitle != "" {
 		header += "  " + helpStyle.Render(group.Entries[0].BookTitle)
 	}
@@ -775,10 +760,8 @@ type kindleBatchSubmitResultMsg struct {
 }
 
 // kindleBatchSubmitCmd adds one note per selection to Anki (skipping any
-// whose phrase already has a note in the deck), advancing the sync
-// watermark and, if configured, marking each word Mastered in vocab.db as
-// it's added — then does the same (without adding a note) for every
-// explicitly skipped entry, so the watermark advances past those too.
+// whose phrase already has a note in the deck), marking each word Mastered
+// in vocab.db as it's added or found to already exist.
 func kindleBatchSubmitCmd(cfg KindleConfig, sentence string, sels []kindleSelection, skipped []kindle.Entry) tea.Cmd {
 	return func() tea.Msg {
 		if err := cfg.AnkiClient.CreateDeck(cfg.Deck); err != nil {
@@ -806,15 +789,9 @@ func kindleBatchSubmitCmd(cfg KindleConfig, sentence string, sels []kindleSelect
 			}
 
 			for _, e := range sel.entries {
-				if err := finishEntry(cfg, e, true); err != nil {
+				if err := markMastered(cfg, e); err != nil {
 					return kindleBatchSubmitResultMsg{added: added, duplicates: duplicates, err: err}
 				}
-			}
-		}
-
-		for _, e := range skipped {
-			if err := finishEntry(cfg, e, false); err != nil {
-				return kindleBatchSubmitResultMsg{added: added, duplicates: duplicates, skipped: len(skipped), err: err}
 			}
 		}
 
@@ -822,31 +799,11 @@ func kindleBatchSubmitCmd(cfg KindleConfig, sentence string, sels []kindleSelect
 	}
 }
 
-// finishEntry persists the sync watermark for e and, if synced (added or
-// already a duplicate) and Mastered is set, marks e Mastered in vocab.db.
-// Entries aren't necessarily reviewed in increasing timestamp order (they're
-// listed most-recently-looked-up first), so the watermark only ever moves
-// forward: it's set to the max of its current value and e's timestamp.
-func finishEntry(cfg KindleConfig, e kindle.Entry, synced bool) error {
-	// Manually-added words (see addPhraseAtCursor) have no vocab.db row, so
-	// there's no watermark timestamp or ID to record anything against.
+// markMastered marks e Mastered in vocab.db. Manually-added words (see
+// addPhraseAtCursor) have no vocab.db row, so there's nothing to mark.
+func markMastered(cfg KindleConfig, e kindle.Entry) error {
 	if cfg.DB == nil || e.ID == "" {
 		return nil
 	}
-	if synced && cfg.Mastered {
-		if err := kindle.MarkMastered(cfg.DB, e.ID); err != nil {
-			return err
-		}
-	}
-	current, err := kindle.LastSynced(cfg.DB)
-	if err != nil {
-		return err
-	}
-	ts := cfg.MaxLookupTimestamp[strings.ToLower(e.Word)]
-	if ts > current {
-		if err := kindle.SetLastSynced(cfg.DB, ts); err != nil {
-			return err
-		}
-	}
-	return nil
+	return kindle.MarkMastered(cfg.DB, e.ID)
 }

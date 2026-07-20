@@ -1,10 +1,10 @@
-description: ankindle word-in-context translation eval
+description: ankix word-in-context translation eval
 
 prompts:
   - "Word: {{word}} | Sentence: {{sentence}}"
 
 providers:
-  - id: ollama:chat:ankindle
+  - id: ollama:chat:ankix
 
 defaultTest:
   assert:
@@ -100,7 +100,7 @@ tests:
 
   - vars:
       word: dio
-      sentence: Leer más: Selección Mexicana: Cruz Azul base de la convocatoria ESTADISTICAS LIGA MX El club dio el salto al fútbol profesional en 1960, ingresando a la Segunda División de México.
+      sentence: "Leer más: Selección Mexicana: Cruz Azul base de la convocatoria ESTADISTICAS LIGA MX El club dio el salto al fútbol profesional en 1960, ingresando a la Segunda División de México."
     assert:
       - type: icontains
         value: "TRANSLATION: gave"
@@ -161,9 +161,17 @@ tests:
       - type: icontains
         value: "LEMMA: beginning"
 
+  - description: "seas quien seas idiom"
+    vars:
+      word: seas quien seas
+      sentence: Como dibujé una pelota enorme en la portada, sé que a ti también te gusta el fútbol, y creo que, seas quien seas, sin importar tu aspecto o a qué escuela vayas, en qué país, ciudad, pueblo o granja vivas, estarás de acuerdo en que lo que estás a punto de leer es la historia más increíble sobre fútbol que jamás hayas oído.
+    assert:
+      - type: icontains
+        value: "TRANSLATION: whoever you are"
+
   - vars:
       word: heredero
-      sentence: Pero la inexactitud filológica es compensada con creces por otro tipo de rigor: el de quien se enfrenta al gran dilema de la vida o la muerte, y no sólo de su propia persona, también de la civilización de la que se siente heredero y actor.
+      sentence: "Pero la inexactitud filológica es compensada con creces por otro tipo de rigor: el de quien se enfrenta al gran dilema de la vida o la muerte, y no sólo de su propia persona, también de la civilización de la que se siente heredero y actor."
     assert:
       - type: icontains
         value: "TRANSLATION: heir"

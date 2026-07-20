@@ -6,9 +6,9 @@ description = "Install ollama/ dependencies"
 run = "pnpm install"
 
 [tasks.create]
-description = "Create the ankindle Ollama model from Modelfile"
-run = "ollama create ankindle -f Modelfile"
+description = "Create the ankix Ollama model from Modelfile"
+run = "ollama create ankix -f Modelfile"
 
 [tasks.eval]
-description = "Run promptfoo eval against the ankindle model"
+description = "Run promptfoo eval against the ankix model"
 run = "pnpm run eval"

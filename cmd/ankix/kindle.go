@@ -26,8 +26,6 @@ type syncOptions struct {
 	ankiURL  string
 	tags     []string
 	dryRun   bool
-	mastered bool
-	full     bool
 	model    string
 	limit    int
 	headless bool
@@ -60,9 +58,7 @@ func newKindleVocabCmd() *cobra.Command {
 	cmd.Flags().StringVar(&o.ankiURL, "ankiconnect-url", "http://localhost:8765", "AnkiConnect endpoint")
 	cmd.Flags().StringSliceVar(&o.tags, "tag", []string{anki.SourceTag("Kindle")}, "tags to apply to new notes")
 	cmd.Flags().BoolVar(&o.dryRun, "dry-run", false, "print what would be synced without writing to Anki (only applies with --headless; the interactive review lets you inspect/skip each word before it's added)")
-	cmd.Flags().BoolVar(&o.mastered, "mastered", false, "filter out words already marked Mastered in vocab.db (default: include them), and mark words that end up in Anki as Mastered (opens vocab.db read-write)")
-	cmd.Flags().BoolVar(&o.full, "full", false, "ignore the sync watermark stored in vocab.db and consider every lookup again")
-	cmd.Flags().StringVar(&o.model, "model", "ankindle", "Ollama model to use")
+	cmd.Flags().StringVar(&o.model, "model", "ankix", "Ollama model to use")
 	cmd.Flags().IntVar(&o.limit, "limit", 0, "limit to the N most recently looked-up words (0 for no limit)")
 	cmd.Flags().BoolVar(&o.headless, "headless", false, "sync every word straight through without the interactive review TUI (e.g. for cron/automation)")
 
@@ -72,10 +68,10 @@ func newKindleVocabCmd() *cobra.Command {
 func runSync(o *syncOptions) error {
 	provider := ollama.New(ollamaURL, o.model)
 
-	// A headless dry run never writes anything, including the sync
-	// watermark, so a read-only handle is enough; every other run (including
-	// every interactive review, which always persists progress as you go)
-	// needs a read-write handle.
+	// A headless dry run never writes anything, including Mastered markers,
+	// so a read-only handle is enough; every other run (including every
+	// interactive review, which marks words Mastered as it goes) needs a
+	// read-write handle.
 	openDB := kindle.Open
 	if !o.headless || !o.dryRun {
 		openDB = kindle.OpenRW
@@ -86,15 +82,7 @@ func runSync(o *syncOptions) error {
 	}
 	defer db.Close()
 
-	var since int64
-	if !o.full {
-		since, err = kindle.LastSynced(db)
-		if err != nil {
-			return err
-		}
-	}
-
-	entries, err := kindle.Entries(db, o.lang, !o.mastered, since)
+	entries, err := kindle.Entries(db, o.lang, false)
 	if err != nil {
 		return err
 	}
@@ -103,7 +91,7 @@ func runSync(o *syncOptions) error {
 		return nil
 	}
 
-	seen, maxLookupTimestamp, words := dedupeEntries(entries)
+	seen, words := dedupeEntries(entries)
 	if o.limit > 0 && o.limit < len(words) {
 		words = words[:o.limit]
 	}
@@ -111,7 +99,7 @@ func runSync(o *syncOptions) error {
 	client := anki.New(o.ankiURL)
 
 	if !o.headless {
-		return runKindleReview(o, db, client, provider, seen, maxLookupTimestamp, words)
+		return runKindleReview(o, db, client, provider, seen, words)
 	}
 
 	if !o.dryRun {
@@ -130,7 +118,7 @@ func runSync(o *syncOptions) error {
 		}
 		if exists {
 			skippedExisting++
-			if o.mastered && !o.dryRun {
+			if !o.dryRun {
 				if err := kindle.MarkMastered(db, e.ID); err != nil {
 					return err
 				}
@@ -165,28 +153,11 @@ func runSync(o *syncOptions) error {
 			}
 			return fmt.Errorf("add note %q: %w", e.Word, err)
 		}
-		if o.mastered {
-			if err := kindle.MarkMastered(db, e.ID); err != nil {
-				return err
-			}
+		if err := kindle.MarkMastered(db, e.ID); err != nil {
+			return err
 		}
 		fmt.Printf("added %q\n", e.Word)
 		added++
-	}
-
-	if !o.dryRun {
-		// Every processed word was considered, whether added, already in
-		// Anki, or skipped for lacking a definition, so it's safe to move
-		// the watermark up to the newest lookup among them.
-		var maxTimestamp int64
-		for _, key := range words {
-			if ts := maxLookupTimestamp[key]; ts > maxTimestamp {
-				maxTimestamp = ts
-			}
-		}
-		if err := kindle.SetLastSynced(db, maxTimestamp); err != nil {
-			return err
-		}
 	}
 
 	fmt.Printf("\ndone: %d added, %d already in Anki, %d skipped (no definition)\n", added, skippedExisting, skippedNoDefinition)
@@ -203,44 +174,36 @@ func noteExists(client *anki.Client, deck, phrase string) (bool, error) {
 }
 
 // dedupeEntries collapses entries (most-recently-looked-up first) down to
-// one per word, keeping the most recent lookup's Entry but tracking the
-// newest lookup timestamp across every lookup of that word, so the sync
-// watermark can account for all of them even though only one Entry survives.
-func dedupeEntries(entries []kindle.Entry) (seen map[string]kindle.Entry, maxLookupTimestamp map[string]int64, words []string) {
+// one per word, keeping the most recent lookup's Entry.
+func dedupeEntries(entries []kindle.Entry) (seen map[string]kindle.Entry, words []string) {
 	seen = make(map[string]kindle.Entry, len(entries))
-	maxLookupTimestamp = make(map[string]int64, len(entries))
 	for _, e := range entries {
 		key := strings.ToLower(e.Word)
 		if _, ok := seen[key]; !ok {
 			seen[key] = e
 			words = append(words, key)
 		}
-		if e.Timestamp > maxLookupTimestamp[key] {
-			maxLookupTimestamp[key] = e.Timestamp
-		}
 	}
-	return seen, maxLookupTimestamp, words
+	return seen, words
 }
 
 // runReview opens the interactive TUI so each word can be reviewed in its
 // usage sentence and the highlighted word/phrase adjusted (e.g. to capture a
 // reflexive form or multi-word phrase Kindle's own lookup can't select)
 // before syncing to Anki.
-func runKindleReview(o *syncOptions, db *sql.DB, client *anki.Client, provider *ollama.Provider, seen map[string]kindle.Entry, maxLookupTimestamp map[string]int64, words []string) error {
+func runKindleReview(o *syncOptions, db *sql.DB, client *anki.Client, provider *ollama.Provider, seen map[string]kindle.Entry, words []string) error {
 	entries := make([]kindle.Entry, len(words))
 	for i, key := range words {
 		entries[i] = seen[key]
 	}
 
 	m := tui.NewKindleReview(tui.KindleConfig{
-		Entries:            entries,
-		MaxLookupTimestamp: maxLookupTimestamp,
-		Deck:               o.deck,
-		Tags:               o.tags,
-		AnkiClient:         client,
-		Dict:               provider,
-		DB:                 db,
-		Mastered:           o.mastered,
+		Entries:    entries,
+		Deck:       o.deck,
+		Tags:       o.tags,
+		AnkiClient: client,
+		Dict:       provider,
+		DB:         db,
 	})
 
 	p := tea.NewProgram(m, tea.WithAltScreen())

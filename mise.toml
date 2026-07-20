@@ -28,6 +28,6 @@ depends = ["build"]
 run = "mkdir -p ~/.local/bin && cp bin/ankix ~/.local/bin/ankix"
 
 [tasks.setup]
-description = "Scaffold local dev environment for both commands (installs deps, creates the shared ankindle Ollama model)"
+description = "Scaffold local dev environment for both commands (installs deps, creates the shared ankix Ollama model)"
 dir = "ollama/vocab"
 run = ["mise run install", "mise run create"]

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -103,9 +102,7 @@ func MarkMastered(db *sql.DB, id string) error {
 // "en" even though it's a Spanish edition looked up with a Spanish
 // dictionary). An empty lang returns lookups for all languages. Words
 // already marked as Mastered are excluded unless includeMastered is true.
-// Only lookups with LOOKUPS.timestamp strictly greater than sinceTimestamp
-// are returned; pass 0 to include everything.
-func Entries(db *sql.DB, lang string, includeMastered bool, sinceTimestamp int64) ([]Entry, error) {
+func Entries(db *sql.DB, lang string, includeMastered bool) ([]Entry, error) {
 	query := `
 		SELECT w.id, w.word, w.stem, w.lang, l.usage, COALESCE(b.title, ''), COALESCE(b.authors, ''), l.timestamp
 		FROM WORDS w
@@ -114,10 +111,9 @@ func Entries(db *sql.DB, lang string, includeMastered bool, sinceTimestamp int64
 		LEFT JOIN DICT_INFO d ON d.id = l.dict_key
 		WHERE (? = '' OR d.langin = ? OR d.langin LIKE ? || '%')
 		AND (? OR w.category != ?)
-		AND l.timestamp > ?
 		ORDER BY w.timestamp DESC
 	`
-	rows, err := db.Query(query, lang, lang, lang, includeMastered, masteredCategory, sinceTimestamp)
+	rows, err := db.Query(query, lang, lang, lang, includeMastered, masteredCategory)
 	if err != nil {
 		return nil, fmt.Errorf("query lookups: %w", err)
 	}
@@ -132,48 +128,4 @@ func Entries(db *sql.DB, lang string, includeMastered bool, sinceTimestamp int64
 		entries = append(entries, e)
 	}
 	return entries, rows.Err()
-}
-
-// syncStateID is the single row key used in the SYNC_STATE table.
-const syncStateID = "ankindle"
-
-// LastSynced returns the LOOKUPS.timestamp watermark recorded by the most
-// recent successful sync, or 0 if ankindle has never synced this vocab.db.
-// It works against a read-only db handle; a missing SYNC_STATE table (not
-// yet created by SetLastSynced) is treated the same as "never synced".
-func LastSynced(db *sql.DB) (int64, error) {
-	var ts int64
-	err := db.QueryRow(`SELECT timestamp FROM SYNC_STATE WHERE id = ?`, syncStateID).Scan(&ts)
-	switch {
-	case err == sql.ErrNoRows:
-		return 0, nil
-	case err != nil && strings.Contains(err.Error(), "no such table"):
-		return 0, nil
-	case err != nil:
-		return 0, fmt.Errorf("read sync state: %w", err)
-	}
-	return ts, nil
-}
-
-// SetLastSynced records timestamp as the LOOKUPS.timestamp watermark for
-// the most recent successful sync, so a future sync can skip lookups
-// already processed.
-func SetLastSynced(db *sql.DB, timestamp int64) error {
-	if err := ensureSyncStateTable(db); err != nil {
-		return err
-	}
-	_, err := db.Exec(`INSERT INTO SYNC_STATE (id, timestamp) VALUES (?, ?)
-		ON CONFLICT (id) DO UPDATE SET timestamp = excluded.timestamp`, syncStateID, timestamp)
-	if err != nil {
-		return fmt.Errorf("write sync state: %w", err)
-	}
-	return nil
-}
-
-func ensureSyncStateTable(db *sql.DB) error {
-	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS SYNC_STATE (id TEXT PRIMARY KEY NOT NULL, timestamp INTEGER DEFAULT 0)`)
-	if err != nil {
-		return fmt.Errorf("create sync state table: %w", err)
-	}
-	return nil
 }

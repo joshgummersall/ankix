@@ -6,7 +6,7 @@ and YouTube video transcripts.
 ## Requirements
 
 - [Ollama](https://ollama.com/) — both the `kindle` and `youtube` commands use
-  the same `ankindle` model (`ollama/vocab/Modelfile`)
+  the same `ankix` model (`ollama/vocab/Modelfile`)
 - [Anki](https://apps.ankiweb.net/) running with [AnkiConnect](https://ankiweb.net/shared/info/2055492159) installed
 - Go to build; `yt-dlp` for the `youtube` command
 
@@ -36,17 +36,19 @@ Flags:
 
 - `--lang` — language prefix to filter words by, e.g. `en`, `es` (default `en`)
 - `--deck` — Anki deck to sync into (default `Kindle Vocab`)
-- `--model` — Ollama model used to define words (default `ankindle`)
+- `--model` — Ollama model used to define words (default `ankix`)
 - `--tag` — tags applied to new notes (default `AnkiX::Source::Kindle`)
 - `--dry-run` — preview without writing to Anki
-- `--mastered` — filter out words already marked Mastered in `vocab.db`
-  from this sync (by default they're included), and mark words that end
-  up in Anki as Mastered (sets `WORDS.category` to `1`), removing them
-  from the Kindle's Vocabulary Builder review queue. Opens `vocab.db`
-  read-write, so point it at the device itself rather than a copy if you
-  want the change to take effect on the device. Before writing anything,
-  `vocab.db` is copied to `vocab.db.bak` alongside it.
 - `--ankiconnect-url` — AnkiConnect endpoint (default `http://localhost:8765`)
+
+Only words not already marked Mastered in `vocab.db` are considered, and any
+word that ends up in Anki (added, or already there) is marked Mastered (sets
+`WORDS.category` to `1`), removing it from the Kindle's Vocabulary Builder
+review queue — that's what tracks sync progress across runs, no separate
+watermark is kept. This opens `vocab.db` read-write (except for a headless
+`--dry-run`), so point it at the device itself rather than a copy if you want
+the change to take effect on the device. Before writing anything, `vocab.db`
+is copied to `vocab.db.bak` alongside it.
 
 Each new note is tagged `AnkiX::Word::<word>`; re-running `sync` checks
 AnkiConnect for that tag in the target deck to skip words already synced,
@@ -72,7 +74,7 @@ Flags (persistent across both subcommands):
 - `--deck` — Anki deck name (default `Spanish::AnkiX`)
 - `--ankiconnect-url` — AnkiConnect URL (default `http://localhost:8765`)
 - `--ollama-url` — Ollama URL (default `http://localhost:11434`)
-- `--ollama-model` — Ollama gloss model name (default `ankindle`)
+- `--ollama-model` — Ollama gloss model name (default `ankix`)
 - `--sub-lang` — subtitle language code (default `es`)
 - `--cache-dir` — subtitle cache directory
 - `--no-gloss` — skip Ollama gloss lookups

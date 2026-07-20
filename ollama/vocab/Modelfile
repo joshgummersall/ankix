@@ -54,3 +54,6 @@ MESSAGE assistant TRANSLATION: keys | LEMMA: key
 
 MESSAGE user Word: envidia | Sentence: No pudo evitar sentir envidia al ver el nuevo coche de su vecino.
 MESSAGE assistant TRANSLATION: envy | LEMMA: envy
+
+MESSAGE user Word: seas quien seas | Sentence: Creo que, seas quien seas, sin importar tu aspecto, estarás de acuerdo.
+MESSAGE assistant TRANSLATION: whoever you are | LEMMA: to be
