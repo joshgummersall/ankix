@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -19,6 +20,7 @@ type kState int
 const (
 	kPicking kState = iota
 	kVisual
+	kEditSentence
 	kConfirm
 	kSubmitting
 	kDone
@@ -47,12 +49,18 @@ type KindleConfig struct {
 }
 
 // KindleModel is the root Bubble Tea model for reviewing Kindle vocab
-// lookups: each word is shown highlighted in its usage sentence, and the
-// user can extend or move that highlight (e.g. to capture a reflexive verb
-// form or multi-word phrase) before the word is defined and synced to Anki.
+// lookups. Entries are grouped by their usage sentence up front, so every
+// word looked up within the same sentence is reviewed together: the
+// sentence is shown once with every candidate word in it highlighted, and
+// the user steps word by word through that group, extending or moving the
+// current word's highlight (e.g. to capture a reflexive verb form or
+// multi-word phrase) before it's defined and synced to Anki.
 type KindleModel struct {
-	cfg KindleConfig
-	idx int
+	cfg    KindleConfig
+	groups []kindle.SentenceGroup
+
+	groupIdx int
+	wordIdx  int // index into groups[groupIdx].Entries
 
 	width, height int
 
@@ -62,7 +70,18 @@ type KindleModel struct {
 	tokens     []token
 	wordTokens []int // indices into tokens that are words
 	wordCursor int
-	visualFrom int // index into wordTokens: anchor of the in-progress visual selection
+
+	// visualLo, visualHi are independent word-token boundaries (indices into
+	// wordTokens) of the in-progress visual selection, so the phrase can be
+	// grown to the left and right independently instead of pivoting around
+	// a single fixed anchor.
+	visualLo, visualHi int
+
+	otherRanges [][2]int // byte ranges of this sentence's other candidate words
+
+	// sentenceInput edits the current group's sentence once, for every word
+	// in that sentence — see enterEditSentence.
+	sentenceInput textarea.Model
 
 	selStart, selEnd int // byte offsets of the confirmed phrase in sentence, or -1 if none
 
@@ -76,31 +95,74 @@ type KindleModel struct {
 	statusErr bool
 }
 
-// NewKindleReview returns a KindleModel positioned at the first entry.
+// NewKindleReview returns a KindleModel positioned at the first word of the
+// first sentence group.
 func NewKindleReview(cfg KindleConfig) KindleModel {
-	m := KindleModel{cfg: cfg}
-	m.loadEntry(0)
+	sei := textarea.New()
+	sei.Prompt = "edit: "
+	sei.ShowLineNumbers = false
+	sei.SetWidth(120)
+	sei.SetHeight(3)
+
+	m := KindleModel{cfg: cfg, groups: kindle.GroupBySentence(cfg.Entries), sentenceInput: sei}
+	m.loadWord(0, 0)
 	return m
 }
 
 func (m *KindleModel) currentEntry() kindle.Entry {
-	return m.cfg.Entries[m.idx]
+	return m.groups[m.groupIdx].Entries[m.wordIdx]
 }
 
-func (m *KindleModel) loadEntry(i int) {
-	if i >= len(m.cfg.Entries) {
+// flatPosition returns this word's 1-based position across every word in
+// every group, for display (e.g. "word 4/12").
+func (m *KindleModel) flatPosition() int {
+	n := m.wordIdx
+	for _, g := range m.groups[:m.groupIdx] {
+		n += len(g.Entries)
+	}
+	return n + 1
+}
+
+func (m *KindleModel) totalWords() int {
+	return len(m.cfg.Entries)
+}
+
+func (m *KindleModel) advance() {
+	m.loadWord(m.groupIdx, m.wordIdx+1)
+}
+
+// loadWord positions the model at groups[groupIdx].Entries[wordIdx],
+// advancing to the next group once wordIdx runs past the current one, and
+// finishing review once groupIdx runs past the last group.
+func (m *KindleModel) loadWord(groupIdx, wordIdx int) {
+	for groupIdx < len(m.groups) && wordIdx >= len(m.groups[groupIdx].Entries) {
+		groupIdx++
+		wordIdx = 0
+	}
+	if groupIdx >= len(m.groups) {
 		m.state = kDone
 		return
 	}
-	m.idx = i
-	e := m.cfg.Entries[i]
+	m.groupIdx, m.wordIdx = groupIdx, wordIdx
+	group := m.groups[groupIdx]
+	e := group.Entries[wordIdx]
 
-	m.sentence = e.Usage
+	m.sentence = group.Usage
 	m.tokens = tokenize(m.sentence)
 	m.wordTokens = m.wordTokens[:0]
 	for ti, t := range m.tokens {
 		if t.isWord {
 			m.wordTokens = append(m.wordTokens, ti)
+		}
+	}
+
+	m.otherRanges = m.otherRanges[:0]
+	for oi, other := range group.Entries {
+		if oi == wordIdx {
+			continue
+		}
+		if start, end := kindle.FindPhrase(m.sentence, other.Word); start >= 0 {
+			m.otherRanges = append(m.otherRanges, [2]int{start, end})
 		}
 	}
 
@@ -110,7 +172,12 @@ func (m *KindleModel) loadEntry(i int) {
 	m.defPending = false
 	m.defErr = nil
 	m.state = kPicking
-	m.setStatus(fmt.Sprintf("word %d/%d: %q — tab/shift+tab move, v extend to a phrase, enter accept", i+1, len(m.cfg.Entries), e.Word), false)
+
+	status := fmt.Sprintf("word %d/%d: %q — tab/shift+tab move, v extend to a phrase, enter accept", m.flatPosition(), m.totalWords(), e.Word)
+	if len(group.Entries) > 1 {
+		status = fmt.Sprintf("word %d/%d: %q (%d words from this sentence) — tab/shift+tab move, v extend to a phrase, enter accept", m.flatPosition(), m.totalWords(), e.Word, len(group.Entries))
+	}
+	m.setStatus(status, false)
 }
 
 // tokenCursorFor returns the index into m.wordTokens of the first word token
@@ -140,6 +207,7 @@ func (m KindleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+		m.sentenceInput.SetWidth(msg.Width)
 		return m, nil
 
 	case tea.KeyMsg:
@@ -171,7 +239,7 @@ func (m KindleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		default:
 			m.added++
 		}
-		m.loadEntry(m.idx + 1)
+		m.advance()
 		return m, nil
 
 	case kindleSkipResultMsg:
@@ -179,7 +247,7 @@ func (m KindleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setStatus(fmt.Sprintf("failed to record skip: %v", msg.err), true)
 		}
 		m.skipped++
-		m.loadEntry(m.idx + 1)
+		m.advance()
 		return m, nil
 	}
 	return m, nil
@@ -194,9 +262,11 @@ func (m KindleModel) handleKindleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	switch msg.String() {
-	case "q", "ctrl+c":
-		return m, tea.Quit
+	if m.state != kEditSentence {
+		switch msg.String() {
+		case "q", "ctrl+c":
+			return m, tea.Quit
+		}
 	}
 
 	switch m.state {
@@ -204,6 +274,8 @@ func (m KindleModel) handleKindleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handlePickingKey(msg)
 	case kVisual:
 		return m.handleVisualKey(msg)
+	case kEditSentence:
+		return m.handleEditSentenceKey(msg)
 	case kConfirm:
 		return m.handleConfirmKey(msg)
 	}
@@ -223,10 +295,13 @@ func (m KindleModel) handlePickingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "v":
-		m.visualFrom = m.wordCursor
+		m.visualLo = m.wordCursor
+		m.visualHi = m.wordCursor
 		m.state = kVisual
-		m.setStatus("tab/shift+tab extend the phrase, enter accept, esc cancel", false)
+		m.setStatus("tab grow right, shift+tab grow left, enter accept, esc cancel", false)
 		return m, nil
+	case "e":
+		return m, m.enterEditSentence()
 	case "s":
 		return m, kindleSkipCmd(m.cfg, m.currentEntry())
 	case "enter":
@@ -242,13 +317,13 @@ func (m KindleModel) handlePickingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m KindleModel) handleVisualKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "l", "right", "tab":
-		if m.wordCursor < len(m.wordTokens)-1 {
-			m.wordCursor++
+		if m.visualHi < len(m.wordTokens)-1 {
+			m.visualHi++
 		}
 		return m, nil
 	case "h", "left", "shift+tab":
-		if m.wordCursor > 0 {
-			m.wordCursor--
+		if m.visualLo > 0 {
+			m.visualLo--
 		}
 		return m, nil
 	case "esc":
@@ -256,11 +331,7 @@ func (m KindleModel) handleVisualKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.setStatus("selection cancelled", false)
 		return m, nil
 	case "enter":
-		lo, hi := m.visualFrom, m.wordCursor
-		if lo > hi {
-			lo, hi = hi, lo
-		}
-		return m.acceptSelection(lo, hi)
+		return m.acceptSelection(m.visualLo, m.visualHi)
 	}
 	return m, nil
 }
@@ -282,6 +353,49 @@ func (m KindleModel) acceptSelection(lo, hi int) (tea.Model, tea.Cmd) {
 	m.defPending = true
 	m.setStatus("looking up definition...", false)
 	return m, kindleDefCmd(m.cfg.Dict, m.sentence[m.selStart:m.selEnd], m.sentence)
+}
+
+// enterEditSentence opens a text input pre-filled with the current
+// sentence, so typos can be fixed once for every word this sentence
+// produces a card for, rather than per word.
+func (m *KindleModel) enterEditSentence() tea.Cmd {
+	m.sentenceInput.SetValue(m.sentence)
+	m.sentenceInput.CursorEnd()
+	cmd := m.sentenceInput.Focus()
+	m.state = kEditSentence
+	m.setStatus("", false)
+	return cmd
+}
+
+func (m KindleModel) handleEditSentenceKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.sentenceInput.Blur()
+		m.state = kPicking
+		m.setStatus("", false)
+		return m, nil
+	case "enter":
+		m.applyEditedSentence(m.sentenceInput.Value())
+		m.sentenceInput.Blur()
+		return m, nil
+	case "ctrl+c":
+		return m, tea.Quit
+	}
+	var cmd tea.Cmd
+	m.sentenceInput, cmd = m.sentenceInput.Update(msg)
+	return m, cmd
+}
+
+// applyEditedSentence saves the edit back onto the current sentence group
+// (so every word from this sentence sees it) and reloads the current word
+// against the new text. Word/phrase byte offsets are recomputed fresh via
+// kindle.FindPhrase rather than carried over, so — unlike the YouTube
+// sentence editor — no marks need to be dropped.
+func (m *KindleModel) applyEditedSentence(edited string) {
+	if edited != m.sentence {
+		m.groups[m.groupIdx].Usage = edited
+	}
+	m.loadWord(m.groupIdx, m.wordIdx)
 }
 
 func (m KindleModel) handleConfirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -315,7 +429,7 @@ func (m KindleModel) View() string {
 	}
 
 	e := m.currentEntry()
-	header := titleStyle.Render(fmt.Sprintf("ankindle review — %d/%d", m.idx+1, len(m.cfg.Entries)))
+	header := titleStyle.Render(fmt.Sprintf("ankindle review — %d/%d", m.flatPosition(), m.totalWords()))
 	if e.BookTitle != "" {
 		header += "  " + helpStyle.Render(e.BookTitle)
 	}
@@ -324,6 +438,8 @@ func (m KindleModel) View() string {
 	switch m.state {
 	case kConfirm, kSubmitting:
 		body = m.renderKindleConfirm()
+	case kEditSentence:
+		body = m.renderKindleEditSentence()
 	default:
 		body = m.renderKindlePicker()
 	}
@@ -340,6 +456,18 @@ func (m KindleModel) View() string {
 	return header + "\n" + body + "\n" + footer + "\n"
 }
 
+// inOtherRange reports whether [start,end) falls within one of this
+// sentence's other candidate words, so they can be dimly underlined while
+// the current word is highlighted.
+func (m KindleModel) inOtherRange(start, end int) bool {
+	for _, r := range m.otherRanges {
+		if start >= r[0] && end <= r[1] {
+			return true
+		}
+	}
+	return false
+}
+
 func (m KindleModel) renderKindlePicker() string {
 	if m.sentence == "" {
 		return "\n" + helpStyle.Render("no usage sentence recorded for this lookup") + "\n"
@@ -347,10 +475,7 @@ func (m KindleModel) renderKindlePicker() string {
 
 	selLo, selHi := -1, -1
 	if m.state == kVisual {
-		selLo, selHi = m.visualFrom, m.wordCursor
-		if selLo > selHi {
-			selLo, selHi = selHi, selLo
-		}
+		selLo, selHi = m.visualLo, m.visualHi
 	}
 
 	var b strings.Builder
@@ -367,10 +492,16 @@ func (m KindleModel) renderKindlePicker() string {
 			text = selectedLineStyle.Render(text)
 		case m.selStart >= 0 && t.start >= m.selStart && t.end <= m.selEnd:
 			text = markedWordStyle.Render(text)
+		case t.isWord && m.inOtherRange(t.start, t.end):
+			text = pendingWordStyle.Render(text)
 		}
 		b.WriteString(text)
 	}
 	return "\n" + b.String() + "\n"
+}
+
+func (m KindleModel) renderKindleEditSentence() string {
+	return "\n" + helpStyle.Render("fix typos in the sentence, then confirm — applies to every word from this sentence") + "\n\n" + m.sentenceInput.View() + "\n"
 }
 
 func (m KindleModel) renderKindleConfirm() string {
@@ -411,11 +542,13 @@ func (m KindleModel) renderKindleConfirm() string {
 func (m KindleModel) helpText() string {
 	switch m.state {
 	case kVisual:
-		return "tab/shift+tab extend  enter accept  esc cancel  q quit"
+		return "tab grow right  shift+tab grow left  enter accept  esc cancel  q quit"
+	case kEditSentence:
+		return "enter confirm edit  esc cancel"
 	case kConfirm, kSubmitting:
 		return "enter add  esc adjust selection  s skip  q quit"
 	default:
-		return "tab/shift+tab move  v extend to a phrase  enter accept  s skip  q quit"
+		return "tab/shift+tab move  v extend to a phrase  e edit sentence  enter accept  s skip  q quit"
 	}
 }
 

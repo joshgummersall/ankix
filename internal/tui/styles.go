@@ -24,6 +24,8 @@ var (
 	wordCursorStyle = lipgloss.NewStyle().Reverse(true).Bold(true)
 	markedWordStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.AdaptiveColor{Light: "130", Dark: "214"}).Bold(true)
+	pendingWordStyle = lipgloss.NewStyle().Underline(true).
+				Foreground(lipgloss.AdaptiveColor{Light: "243", Dark: "246"})
 	titleStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.AdaptiveColor{Light: "25", Dark: "39"}).Bold(true)
 	helpKeyStyle = lipgloss.NewStyle().
