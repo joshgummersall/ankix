@@ -11,7 +11,7 @@ type youtubeFlags struct {
 	cacheDir string
 }
 
-func newYouTubeCmd() *cobra.Command {
+func newYouTubeCmd(cfg config) *cobra.Command {
 	f := &youtubeFlags{}
 
 	cmd := &cobra.Command{
@@ -25,8 +25,8 @@ func newYouTubeCmd() *cobra.Command {
 	}
 	defaultCacheDir += "/ankix/youtube"
 
-	cmd.PersistentFlags().StringVar(&f.subLang, "sub-lang", "es", "subtitle language code")
-	cmd.PersistentFlags().StringVar(&f.cacheDir, "cache-dir", defaultCacheDir, "subtitle cache directory")
+	cmd.PersistentFlags().StringVar(&f.subLang, "sub-lang", strOr(cfg.YouTube.SubLang, strOr(cfg.Lang, "es")), "subtitle language code")
+	cmd.PersistentFlags().StringVar(&f.cacheDir, "cache-dir", strOr(cfg.YouTube.CacheDir, defaultCacheDir), "subtitle cache directory")
 
 	cmd.AddCommand(newYouTubeFetchCmd(f))
 	cmd.AddCommand(newYouTubeReviewCmd(f))

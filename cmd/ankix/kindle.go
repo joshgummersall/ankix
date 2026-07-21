@@ -25,16 +25,16 @@ type syncOptions struct {
 	headless bool
 }
 
-func newKindleCmd() *cobra.Command {
+func newKindleCmd(cfg config) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "kindle",
 		Short: "Manage Kindle vocabulary builder words",
 	}
-	cmd.AddCommand(newKindleVocabCmd())
+	cmd.AddCommand(newKindleVocabCmd(cfg))
 	return cmd
 }
 
-func newKindleVocabCmd() *cobra.Command {
+func newKindleVocabCmd(cfg config) *cobra.Command {
 	o := &syncOptions{}
 
 	cmd := &cobra.Command{
@@ -47,7 +47,7 @@ func newKindleVocabCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&o.lang, "lang", "en", "language prefix to filter words by, matched against the dictionary used for each lookup (e.g. en, es); empty for all")
+	cmd.Flags().StringVar(&o.lang, "lang", strOr(cfg.Kindle.Lang, strOr(cfg.Lang, "en")), "language prefix to filter words by, matched against the dictionary used for each lookup (e.g. en, es); empty for all")
 	cmd.Flags().StringSliceVar(&o.tags, "tag", []string{anki.SourceTag("Kindle")}, "tags to apply to new notes")
 	cmd.Flags().BoolVar(&o.dryRun, "dry-run", false, "print what would be synced without writing to Anki (only applies with --headless; the interactive review lets you inspect/skip each word before it's added)")
 	cmd.Flags().IntVar(&o.limit, "limit", 0, "limit to the N most recently looked-up words (0 for no limit)")
