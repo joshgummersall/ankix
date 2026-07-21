@@ -325,33 +325,41 @@ func (m Model) renderTranscript() string {
 	}
 
 	for i, c := range cues {
-		marker := "  "
-		switch {
-		case m.cardedLines[i]:
-			marker = cardedMarkerStyle.Render("✓ ")
-		case i == curLine:
-			marker = currentLineMarkerStyle.Render("› ")
-		}
-		ts := timestampStyle.Render(fmt.Sprintf("%s ", formatTS(c.Start)))
-
 		start := m.cueFirstWord[i]
 		end := len(m.words)
 		if i+1 < len(m.cueFirstWord) {
 			end = m.cueFirstWord[i+1]
 		}
 
+		lineCarded := false
+		for wi := start; wi < end; wi++ {
+			if m.cardedWords[wi] {
+				lineCarded = true
+				break
+			}
+		}
+
+		marker := "  "
+		switch {
+		case lineCarded:
+			marker = cardedMarkerStyle.Render("✓ ")
+		case i == curLine:
+			marker = currentLineMarkerStyle.Render("› ")
+		}
+		ts := timestampStyle.Render(fmt.Sprintf("%s ", formatTS(c.Start)))
+
 		var words strings.Builder
 		for wi := start; wi < end; wi++ {
 			if wi > start {
 				// Style the separator too when both neighboring words share
 				// the same highlight, so a multi-word selection (or a
-				// carded line) reads as one continuous background block
+				// carded run) reads as one continuous background block
 				// instead of disjoint per-word chips.
 				sep := " "
 				switch {
 				case selLo != -1 && wi-1 >= selLo && wi <= selHi:
 					sep = activeSelectionStyle.Render(sep)
-				case m.cardedLines[i]:
+				case m.cardedWords[wi-1] && m.cardedWords[wi]:
 					sep = cardedWordStyle.Render(sep)
 				}
 				words.WriteString(sep)
@@ -366,7 +374,7 @@ func (m Model) renderTranscript() string {
 				}
 			case wi == m.cursorWord:
 				text = wordCursorStyle.Render(text)
-			case m.cardedLines[i]:
+			case m.cardedWords[wi]:
 				text = cardedWordStyle.Render(text)
 			}
 			words.WriteString(text)

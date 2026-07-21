@@ -72,7 +72,7 @@ type Model struct {
 
 	cueStart time.Duration
 
-	cardedLines map[int]bool // cue indices with at least one submitted card
+	cardedWords map[int]bool // word indices included in a submitted card
 
 	status    string
 	statusErr bool
@@ -103,7 +103,7 @@ func New(cfg Config) Model {
 		state:         stateBrowse,
 		searchInput:   si,
 		sentenceInput: sei,
-		cardedLines:   make(map[int]bool),
+		cardedWords:   make(map[int]bool),
 		words:         words,
 		cueFirstWord:  cueFirstWord,
 	}
@@ -167,7 +167,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.state = stateBrowse
 		for i := m.selWordStart; i <= m.selWordEnd; i++ {
-			m.cardedLines[m.words[i].CueIndex] = true
+			m.cardedWords[i] = true
 		}
 		m.syncViewport()
 		return m, nil
