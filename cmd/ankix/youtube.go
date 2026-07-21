@@ -7,13 +7,8 @@ import (
 )
 
 type youtubeFlags struct {
-	deck        string
-	ankiConnect string
-	ollamaURL   string
-	ollamaModel string
-	subLang     string
-	cacheDir    string
-	noGloss     bool
+	subLang  string
+	cacheDir string
 }
 
 func newYouTubeCmd() *cobra.Command {
@@ -30,13 +25,8 @@ func newYouTubeCmd() *cobra.Command {
 	}
 	defaultCacheDir += "/ankix/youtube"
 
-	cmd.PersistentFlags().StringVar(&f.deck, "deck", "AnkiX", "Anki deck name")
-	cmd.PersistentFlags().StringVar(&f.ankiConnect, "ankiconnect-url", "http://localhost:8765", "AnkiConnect URL")
-	cmd.PersistentFlags().StringVar(&f.ollamaURL, "ollama-url", "http://localhost:11434", "Ollama URL")
-	cmd.PersistentFlags().StringVar(&f.ollamaModel, "ollama-model", "ankix", "Ollama gloss model name")
 	cmd.PersistentFlags().StringVar(&f.subLang, "sub-lang", "es", "subtitle language code")
 	cmd.PersistentFlags().StringVar(&f.cacheDir, "cache-dir", defaultCacheDir, "subtitle cache directory")
-	cmd.PersistentFlags().BoolVar(&f.noGloss, "no-gloss", false, "skip Ollama gloss lookups")
 
 	cmd.AddCommand(newYouTubeFetchCmd(f))
 	cmd.AddCommand(newYouTubeReviewCmd(f))

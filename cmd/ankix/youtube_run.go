@@ -65,11 +65,11 @@ func runReview(f *youtubeFlags, path string) error {
 
 func launchYouTubeTUI(f *youtubeFlags, transcript *subtitle.Transcript, title string) error {
 	var translator translate.Provider
-	if !f.noGloss {
-		translator = glossProvider{ollama.New(f.ollamaURL, f.ollamaModel)}
+	if !noGloss {
+		translator = glossProvider{ollama.New(ollamaURL, ollamaModel)}
 	}
 
-	client := anki.New(f.ankiConnect)
+	client := anki.New(ankiConnectURL)
 	if names, err := client.ModelNames(); err == nil {
 		found := false
 		for _, n := range names {
@@ -93,11 +93,11 @@ func launchYouTubeTUI(f *youtubeFlags, transcript *subtitle.Transcript, title st
 	m := tui.New(tui.Config{
 		Document:   &tui.Document{SourceID: videoID, Lines: lines},
 		Title:      title,
-		Deck:       f.deck,
+		Deck:       deck,
 		AnkiClient: client,
 		Translator: translator,
 		BuildNote: func(lineIndex int, sentence string, sel anki.WordSelection) anki.Note {
-			return anki.BuildYouTubeNote(f.deck, title, videoID, cues[lineIndex].Start, sentence, sel)
+			return anki.BuildYouTubeNote(deck, title, videoID, cues[lineIndex].Start, sentence, sel)
 		},
 		PreviewLink: func(lineIndex int) string {
 			return anki.VideoLink(videoID, cues[lineIndex].Start)

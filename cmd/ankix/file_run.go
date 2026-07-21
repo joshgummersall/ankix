@@ -36,11 +36,11 @@ func runFileOpen(f *fileFlags, path string) error {
 
 func launchFileTUI(f *fileFlags, doc *tui.Document, title string) error {
 	var translator translate.Provider
-	if !f.noGloss {
-		translator = glossProvider{ollama.New(f.ollamaURL, f.ollamaModel)}
+	if !noGloss {
+		translator = glossProvider{ollama.New(ollamaURL, ollamaModel)}
 	}
 
-	client := anki.New(f.ankiConnect)
+	client := anki.New(ankiConnectURL)
 	if names, err := client.ModelNames(); err == nil {
 		found := false
 		for _, n := range names {
@@ -57,11 +57,11 @@ func launchFileTUI(f *fileFlags, doc *tui.Document, title string) error {
 	m := tui.New(tui.Config{
 		Document:   doc,
 		Title:      title,
-		Deck:       f.deck,
+		Deck:       deck,
 		AnkiClient: client,
 		Translator: translator,
 		BuildNote: func(lineIndex int, sentence string, sel anki.WordSelection) anki.Note {
-			return anki.BuildNote(f.deck, title, "", "File", sentence, sel)
+			return anki.BuildNote(deck, title, "", "File", sentence, sel)
 		},
 	})
 

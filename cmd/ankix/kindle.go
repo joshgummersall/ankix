@@ -16,17 +16,11 @@ import (
 	"github.com/joshgummersall/ankix/internal/tui"
 )
 
-// ollamaURL is the default Ollama endpoint used to write definitions.
-const ollamaURL = "http://localhost:11434"
-
 type syncOptions struct {
 	dbPath   string
 	lang     string
-	deck     string
-	ankiURL  string
 	tags     []string
 	dryRun   bool
-	model    string
 	limit    int
 	headless bool
 }
@@ -54,11 +48,8 @@ func newKindleVocabCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&o.lang, "lang", "en", "language prefix to filter words by, matched against the dictionary used for each lookup (e.g. en, es); empty for all")
-	cmd.Flags().StringVar(&o.deck, "deck", "Kindle Vocab", "Anki deck name to sync into")
-	cmd.Flags().StringVar(&o.ankiURL, "ankiconnect-url", "http://localhost:8765", "AnkiConnect endpoint")
 	cmd.Flags().StringSliceVar(&o.tags, "tag", []string{anki.SourceTag("Kindle")}, "tags to apply to new notes")
 	cmd.Flags().BoolVar(&o.dryRun, "dry-run", false, "print what would be synced without writing to Anki (only applies with --headless; the interactive review lets you inspect/skip each word before it's added)")
-	cmd.Flags().StringVar(&o.model, "model", "ankix", "Ollama model to use")
 	cmd.Flags().IntVar(&o.limit, "limit", 0, "limit to the N most recently looked-up words (0 for no limit)")
 	cmd.Flags().BoolVar(&o.headless, "headless", false, "sync every word straight through without the interactive review TUI (e.g. for cron/automation)")
 
@@ -66,7 +57,7 @@ func newKindleVocabCmd() *cobra.Command {
 }
 
 func runSync(o *syncOptions) error {
-	provider := ollama.New(ollamaURL, o.model)
+	provider := ollama.New(ollamaURL, ollamaModel)
 
 	// A headless dry run never writes anything, including Mastered markers,
 	// so a read-only handle is enough; every other run (including every
@@ -96,14 +87,14 @@ func runSync(o *syncOptions) error {
 		words = words[:o.limit]
 	}
 
-	client := anki.New(o.ankiURL)
+	client := anki.New(ankiConnectURL)
 
 	if !o.headless {
 		return runKindleReview(o, db, client, provider, seen, words)
 	}
 
 	if !o.dryRun {
-		if err := client.CreateDeck(o.deck); err != nil {
+		if err := client.CreateDeck(deck); err != nil {
 			return err
 		}
 	}
@@ -112,7 +103,7 @@ func runSync(o *syncOptions) error {
 	for _, key := range words {
 		e := seen[key]
 
-		exists, err := noteExists(client, o.deck, key)
+		exists, err := noteExists(client, deck, key)
 		if err != nil {
 			return err
 		}
@@ -137,7 +128,7 @@ func runSync(o *syncOptions) error {
 		}
 
 		start, end := kindle.FindPhrase(e.Usage, e.Word)
-		note := kindle.BuildNote(o.deck, o.tags, e, e.Usage, start, end, kindle.FormatDefinition(e.Word, definition))
+		note := kindle.BuildNote(deck, o.tags, e, e.Usage, start, end, kindle.FormatDefinition(e.Word, definition))
 
 		if o.dryRun {
 			fmt.Printf("would add %q\n  front: %s\n  back:  %s\n", e.Word, note.Fields["Front"], note.Fields["Back"])
@@ -199,7 +190,7 @@ func runKindleReview(o *syncOptions, db *sql.DB, client *anki.Client, provider *
 
 	m := tui.NewKindleReview(tui.KindleConfig{
 		Entries:    entries,
-		Deck:       o.deck,
+		Deck:       deck,
 		Tags:       o.tags,
 		AnkiClient: client,
 		Dict:       provider,
