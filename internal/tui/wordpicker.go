@@ -54,7 +54,7 @@ func phraseStyle(toggle, isCursor bool) lipgloss.Style {
 	}
 }
 
-// wpDebounce is how long expand mode waits after the last tab/shift+tab
+// wpDebounce is how long expand mode waits after the last grow/shrink key
 // before kicking off a gloss lookup for the phrase's current bounds, so
 // rapid-fire growing doesn't fire a lookup per keystroke.
 const wpDebounce = 350 * time.Millisecond
@@ -248,7 +248,7 @@ func (m Model) handleWordPickKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.setStatus("", false)
 		m.syncViewport()
 		return m, nil
-	case "l", "right", "tab":
+	case "l", "right":
 		next := m.wordCursor + 1
 		if i, ok := m.phraseAt(m.wordCursor); ok {
 			next = m.phrases[i].hi + 1
@@ -261,7 +261,7 @@ func (m Model) handleWordPickKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.wordCursor = next
 		return m, nil
-	case "h", "left", "shift+tab":
+	case "h", "left":
 		next := m.wordCursor - 1
 		if i, ok := m.phraseAt(m.wordCursor); ok {
 			next = m.phrases[i].lo - 1
@@ -292,7 +292,7 @@ func (m Model) handleWordPickKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.expandIdx = i
 		m.expandOrigLo, m.expandOrigHi = m.phrases[i].lo, m.phrases[i].hi
 		m.state = stateWordExpand
-		m.setStatus("tab grow right, shift+tab grow left, enter confirm, esc cancel", false)
+		m.setStatus("l grow right, L shrink right, h grow left, H shrink left, enter confirm, esc cancel", false)
 		return m, m.debounceGlossRefresh()
 	case "d":
 		if len(m.phrases) == 0 {
@@ -346,18 +346,30 @@ func (m Model) submitWordPick() (tea.Model, tea.Cmd) {
 
 func (m Model) handleWordExpandKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "l", "right", "tab":
+	case "l":
 		if m.phrases[m.expandIdx].hi < len(m.wordTokens)-1 {
 			m.phrases[m.expandIdx].hi++
 		}
 		m.mergeOverlaps(m.expandIdx)
 		m.wordCursor = m.phrases[m.expandIdx].hi
 		return m, m.debounceGlossRefresh()
-	case "h", "left", "shift+tab":
+	case "L":
+		if m.phrases[m.expandIdx].hi > m.phrases[m.expandIdx].lo {
+			m.phrases[m.expandIdx].hi--
+		}
+		m.wordCursor = m.phrases[m.expandIdx].hi
+		return m, m.debounceGlossRefresh()
+	case "h":
 		if m.phrases[m.expandIdx].lo > 0 {
 			m.phrases[m.expandIdx].lo--
 		}
 		m.mergeOverlaps(m.expandIdx)
+		m.wordCursor = m.phrases[m.expandIdx].lo
+		return m, m.debounceGlossRefresh()
+	case "H":
+		if m.phrases[m.expandIdx].lo < m.phrases[m.expandIdx].hi {
+			m.phrases[m.expandIdx].lo++
+		}
 		m.wordCursor = m.phrases[m.expandIdx].lo
 		return m, m.debounceGlossRefresh()
 	case "esc":

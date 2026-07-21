@@ -19,37 +19,37 @@ func newTestWordPickModel(t *testing.T, sentence string) Model {
 	return m
 }
 
-func TestWordPick_TabMovesCursorForward(t *testing.T) {
+func TestWordPick_LMovesCursorForward(t *testing.T) {
 	m := newTestWordPickModel(t, "la casa vieja de mi abuela")
 
-	mi, _ := m.Update(key("tab"))
+	mi, _ := m.Update(key("l"))
 	m = mi.(Model)
 	if m.wordCursor != 1 {
-		t.Fatalf("after 1 tab: wordCursor=%d, want 1", m.wordCursor)
+		t.Fatalf("after 1 l: wordCursor=%d, want 1", m.wordCursor)
 	}
 
-	mi, _ = m.Update(key("tab"))
+	mi, _ = m.Update(key("l"))
 	m = mi.(Model)
 	if m.wordCursor != 2 {
-		t.Fatalf("after 2 tabs: wordCursor=%d, want 2", m.wordCursor)
+		t.Fatalf("after 2 l's: wordCursor=%d, want 2", m.wordCursor)
 	}
 }
 
-func TestWordPick_ShiftTabMovesCursorBack(t *testing.T) {
+func TestWordPick_HMovesCursorBack(t *testing.T) {
 	m := newTestWordPickModel(t, "la casa vieja de mi abuela")
 
 	for range 3 {
-		mi, _ := m.Update(key("tab"))
+		mi, _ := m.Update(key("l"))
 		m = mi.(Model)
 	}
 	if m.wordCursor != 3 {
 		t.Fatalf("wordCursor = %d, want 3", m.wordCursor)
 	}
 
-	mi, _ := m.Update(key("shift+tab"))
+	mi, _ := m.Update(key("h"))
 	m = mi.(Model)
 	if m.wordCursor != 2 {
-		t.Fatalf("after shift+tab: wordCursor=%d, want 2", m.wordCursor)
+		t.Fatalf("after h: wordCursor=%d, want 2", m.wordCursor)
 	}
 }
 
@@ -68,7 +68,7 @@ func activePhraseCount(m Model) int {
 func TestWordPick_VMarksCurrentWord(t *testing.T) {
 	m := newTestWordPickModel(t, "la casa vieja")
 
-	mi, _ := m.Update(key("tab")) // move to "casa"
+	mi, _ := m.Update(key("l")) // move to "casa"
 	m = mi.(Model)
 	mi, _ = m.Update(key("v")) // start expanding a new phrase for "casa"
 	m = mi.(Model)
@@ -99,9 +99,9 @@ func TestWordPick_MultipleVMarksMultipleWords(t *testing.T) {
 	m = mi.(Model)
 	mi, _ = m.Update(key("enter"))
 	m = mi.(Model)
-	mi, _ = m.Update(key("tab"))
+	mi, _ = m.Update(key("l"))
 	m = mi.(Model)
-	mi, _ = m.Update(key("tab"))
+	mi, _ = m.Update(key("l"))
 	m = mi.(Model)
 	mi, _ = m.Update(key("v")) // mark "vieja"
 	m = mi.(Model)

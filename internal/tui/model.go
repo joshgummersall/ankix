@@ -54,9 +54,9 @@ type Model struct {
 	pendingG   bool
 
 	// visualLo/Hi are the independent word-index boundaries of the
-	// in-progress transcript selection (stateVisual), grown one at a time
-	// by tab/shift+tab (word) and j/k (line) — mirrors the v/tab/shift+tab
-	// phrase-expansion UX used once inside word pick.
+	// in-progress transcript selection (stateVisual), grown/shrunk one at a
+	// time by h/l (word) and j/k (line) — mirrors the v/h/l phrase-expansion
+	// UX used once inside word pick.
 	visualLo, visualHi int
 
 	searching   bool
@@ -121,7 +121,7 @@ func New(cfg Config) Model {
 		cardedLines:   make(map[int]bool),
 		words:         words,
 		cueFirstWord:  cueFirstWord,
-		status:        fmt.Sprintf("%d lines loaded — tab/shift+tab word, j/k line, v select, enter confirm, q quit", len(cfg.Transcript.Cues)),
+		status:        fmt.Sprintf("%d lines loaded — h/l word, j/k line, v select, enter confirm, q quit", len(cfg.Transcript.Cues)),
 	}
 }
 
@@ -242,16 +242,16 @@ func (m Model) View() string {
 func (m Model) helpText() string {
 	switch m.state {
 	case stateVisual:
-		return "tab/shift+tab extend by word  j/k extend by line  enter complete selection  esc cancel"
+		return "h/l grow left/right  H/L shrink left/right  j/k grow down/up  J/K shrink down/up  enter complete selection  esc cancel"
 	case stateWordPick:
-		return "tab/shift+tab move  v expand/add word  d delete word  e edit sentence  enter add all  esc cancel"
+		return "h/l move  v expand/add word  d delete word  e edit sentence  enter add all  esc cancel"
 	case stateWordExpand:
-		return "tab grow right  shift+tab grow left  enter confirm  esc cancel"
+		return "h/l grow left/right  H/L shrink left/right  enter confirm  esc cancel"
 	case stateEditSentence:
 		return "enter save  esc discard changes"
 	case stateSubmitting:
 		return "submitting..."
 	default:
-		return "tab/shift+tab word  j/k line  gg/G top/bottom  v start selection  / search  enter confirm  ? help  q quit"
+		return "h/l word  j/k line  gg/G top/bottom  v start selection  / search  enter confirm  ? help  q quit"
 	}
 }

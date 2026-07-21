@@ -17,7 +17,7 @@ import (
 	"github.com/joshgummersall/ankix/internal/kindle"
 )
 
-// defDebounce is how long expand-mode waits after the last tab/shift+tab
+// defDebounce is how long expand-mode waits after the last grow/shrink key
 // before kicking off a definition lookup for the phrase's current bounds,
 // so rapid-fire growing doesn't fire a lookup per keystroke.
 const defDebounce = 350 * time.Millisecond
@@ -92,8 +92,8 @@ type kindleSelection struct {
 // starts expanding it; on a deleted word it restores that phrase to its
 // original single-word state; on any other word in the sentence, it first
 // adds that word as a new phrase (not from a Kindle lookup) and starts
-// expanding that. Either way, tab/shift+tab then grow the phrase
-// right/left, and enter confirms it (esc cancels back to before expanding,
+// expanding that. Either way, h/l then grow the phrase left/right, H/L
+// shrink it left/right, and enter confirms it (esc cancels back to before expanding,
 // discarding a newly added word entirely). If expanding makes two words'
 // phrases overlap, they're merged into a single card covering both. d
 // deletes a word, clearing its selection state entirely (v re-adds it).
@@ -236,7 +236,7 @@ func (m *KindleModel) pickingStatus() string {
 	if cards != 1 {
 		word = "cards"
 	}
-	return fmt.Sprintf("sentence %d/%d — %d %s will be added — tab/shift+tab move, v expand/add word, d delete word, e edit sentence, enter add",
+	return fmt.Sprintf("sentence %d/%d — %d %s will be added — h/l move, v expand/add word, d delete word, e edit sentence, enter add",
 		m.groupIdx+1, len(m.groups), cards, word)
 }
 
@@ -435,7 +435,7 @@ func (m KindleModel) handleKindleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m KindleModel) handlePickingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "l", "right", "tab":
+	case "l", "right":
 		next := m.wordCursor + 1
 		if i, ok := m.phraseAt(m.wordCursor); ok {
 			next = m.phrases[i].hi + 1
@@ -448,7 +448,7 @@ func (m KindleModel) handlePickingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.wordCursor = next
 		return m, nil
-	case "h", "left", "shift+tab":
+	case "h", "left":
 		next := m.wordCursor - 1
 		if i, ok := m.phraseAt(m.wordCursor); ok {
 			next = m.phrases[i].lo - 1
@@ -477,7 +477,7 @@ func (m KindleModel) handlePickingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.expandIdx = i
 		m.expandOrigLo, m.expandOrigHi = m.phrases[i].lo, m.phrases[i].hi
 		m.state = kExpanding
-		m.setStatus("tab grow right, shift+tab grow left, enter confirm, esc cancel", false)
+		m.setStatus("l grow right, L shrink right, h grow left, H shrink left, enter confirm, esc cancel", false)
 		return m, m.debounceDefRefresh()
 	case "d":
 		if len(m.phrases) == 0 {
@@ -503,18 +503,30 @@ func (m KindleModel) handlePickingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // with any other phrase it comes to overlap.
 func (m KindleModel) handleExpandingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "l", "right", "tab":
+	case "l":
 		if m.phrases[m.expandIdx].hi < len(m.wordTokens)-1 {
 			m.phrases[m.expandIdx].hi++
 		}
 		m.mergeOverlaps(m.expandIdx)
 		m.wordCursor = m.phrases[m.expandIdx].hi
 		return m, m.debounceDefRefresh()
-	case "h", "left", "shift+tab":
+	case "L":
+		if m.phrases[m.expandIdx].hi > m.phrases[m.expandIdx].lo {
+			m.phrases[m.expandIdx].hi--
+		}
+		m.wordCursor = m.phrases[m.expandIdx].hi
+		return m, m.debounceDefRefresh()
+	case "h":
 		if m.phrases[m.expandIdx].lo > 0 {
 			m.phrases[m.expandIdx].lo--
 		}
 		m.mergeOverlaps(m.expandIdx)
+		m.wordCursor = m.phrases[m.expandIdx].lo
+		return m, m.debounceDefRefresh()
+	case "H":
+		if m.phrases[m.expandIdx].lo < m.phrases[m.expandIdx].hi {
+			m.phrases[m.expandIdx].lo++
+		}
 		m.wordCursor = m.phrases[m.expandIdx].lo
 		return m, m.debounceDefRefresh()
 	case "esc":
@@ -743,13 +755,13 @@ func (m KindleModel) renderKindleEditSentence() string {
 func (m KindleModel) helpText() string {
 	switch m.state {
 	case kExpanding:
-		return "tab grow right  shift+tab grow left  enter confirm  esc cancel"
+		return "h/l grow left/right  H/L shrink left/right  enter confirm  esc cancel"
 	case kEditSentence:
 		return "enter confirm edit  esc cancel"
 	case kSubmitting:
 		return "submitting..."
 	default:
-		return "tab/shift+tab move  v expand/add word under cursor  d delete word  e edit sentence  enter add all  q quit"
+		return "h/l move  v expand/add word under cursor  d delete word  e edit sentence  enter add all  q quit"
 	}
 }
 

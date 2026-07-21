@@ -64,7 +64,7 @@ func (m Model) handleBrowseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.state = stateBrowse
 		m.syncViewport()
 		return m, nil
-	case "l", "right", "tab":
+	case "l", "right":
 		if m.state == stateVisual {
 			if m.visualHi < len(m.words)-1 {
 				m.visualHi++
@@ -75,7 +75,17 @@ func (m Model) handleBrowseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.moveCursorWord(1)
 		return m, nil
-	case "h", "left", "shift+tab":
+	case "L":
+		if m.state == stateVisual {
+			if m.visualHi > m.visualLo {
+				m.visualHi--
+			}
+			m.cursorWord = m.visualHi
+			m.syncViewport()
+			return m, nil
+		}
+		return m, nil
+	case "h", "left":
 		if m.state == stateVisual {
 			if m.visualLo > 0 {
 				m.visualLo--
@@ -85,6 +95,16 @@ func (m Model) handleBrowseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.moveCursorWord(-1)
+		return m, nil
+	case "H":
+		if m.state == stateVisual {
+			if m.visualLo < m.visualHi {
+				m.visualLo++
+			}
+			m.cursorWord = m.visualLo
+			m.syncViewport()
+			return m, nil
+		}
 		return m, nil
 	case "j", "down":
 		if m.state == stateVisual {
@@ -97,6 +117,16 @@ func (m Model) handleBrowseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.moveCursorLine(1)
 		return m, nil
+	case "J":
+		if m.state == stateVisual {
+			if line := m.lineOfWord(m.visualHi) - 1; line >= m.lineOfWord(m.visualLo) {
+				m.visualHi = m.cueFirstWord[line+1] - 1
+			}
+			m.cursorWord = m.visualHi
+			m.syncViewport()
+			return m, nil
+		}
+		return m, nil
 	case "k", "up":
 		if m.state == stateVisual {
 			if line := m.lineOfWord(m.visualLo) - 1; line >= 0 {
@@ -107,6 +137,16 @@ func (m Model) handleBrowseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.moveCursorLine(-1)
+		return m, nil
+	case "K":
+		if m.state == stateVisual {
+			if line := m.lineOfWord(m.visualLo) + 1; line <= m.lineOfWord(m.visualHi) {
+				m.visualLo = m.cueFirstWord[line]
+			}
+			m.cursorWord = m.visualLo
+			m.syncViewport()
+			return m, nil
+		}
 		return m, nil
 	case "g":
 		m.pendingG = true
