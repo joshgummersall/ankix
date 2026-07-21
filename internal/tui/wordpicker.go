@@ -21,6 +21,7 @@ func (m *Model) enterWordPick() {
 	m.sentence = strings.Join(parts, " ")
 	m.cueStart = m.cfg.Transcript.Cues[m.words[m.selWordStart].CueIndex].Start
 	m.ps.reset(m.sentence)
+	m.ps.wordCursor = m.cursorWord - m.selWordStart
 	m.setStatus("", false)
 	m.state = stateWordPick
 }
