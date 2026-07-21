@@ -38,6 +38,11 @@ Rules:
    linked to it (e.g. an adjective that agrees with it) or make the phrase
    sound more natural. If the word is "llaves" in "unas llaves nuevas", the
    answer is "keys", not "new keys".
+5. Watch for false friends and homographs: many Spanish words have a common
+   figurative, domain-specific, or body-part sense that is unrelated to
+   their most obvious English cognate or literal reading. Check whether the
+   sentence's topic (sports, anatomy, geography, etc.) points to that other
+   sense before answering with the literal one.
 """
 
 MESSAGE user Word: banco | Sentence: Nos sentamos en el banco del parque mientras esperábamos el autobús.
@@ -63,3 +68,24 @@ MESSAGE assistant TRANSLATION: envy | LEMMA: envy
 
 MESSAGE user Word: seas quien seas | Sentence: Creo que, seas quien seas, sin importar tu aspecto, estarás de acuerdo.
 MESSAGE assistant TRANSLATION: whoever you are | LEMMA: to be
+
+MESSAGE user Word: causa | Sentence: Montaigne hace referencia a la destrucción que el fanatismo causa cuando alcanza el poder.
+MESSAGE assistant TRANSLATION: causes | LEMMA: to cause
+
+MESSAGE user Word: el arco | Sentence: Demasiados defensas se interpusieron entre el arco y yo como para meterla yo solo.
+MESSAGE assistant TRANSLATION: the goal | LEMMA: goal
+
+MESSAGE user Word: gancho | Sentence: Volví a cortar hacia la derecha, un rápido uno-dos de gancho, y lo rebasé como si estuviera parado.
+MESSAGE assistant TRANSLATION: hook | LEMMA: hook
+
+MESSAGE user Word: puntería | Sentence: Tengo una puntería increíble y los pases más creativos que jamás verás.
+MESSAGE assistant TRANSLATION: aim | LEMMA: aim
+
+MESSAGE user Word: desde | Sentence: Todos los padres alentaban desde la tribuna como si fuera la final.
+MESSAGE assistant TRANSLATION: from | LEMMA: from
+
+MESSAGE user Word: repartidos | Sentence: Se han ganado unos 44 títulos, repartidos entre oficiales e internacionales.
+MESSAGE assistant TRANSLATION: divided | LEMMA: to divide
+
+MESSAGE user Word: relieve | Sentence: Pero la diferencia es que esas islas son volcánicas, se originaron por volcanes y por eso son islas que tienen mucho relieve, que tienen muchas montañas, mientras que en el caso de Barbados es diferente porque es una isla hecha de coral.
+MESSAGE assistant TRANSLATION: relief | LEMMA: relief (terrain)

@@ -39,12 +39,13 @@ tests:
       - type: regex
         value: "LEMMA: (envy|jealousy)"
 
-  - vars:
-      word: rompió
+  - description: "rompió a llorar idiom - burst into tears, not literal 'break' (marked as the full idiom, matching how ankix marks selections)"
+    vars:
+      word: rompió a llorar
       sentence: Se le hizo un nudo en la garganta y rompió a llorar sin poder contenerse.
     assert:
       - type: icontains
-        value: "LEMMA: to break"
+        value: "burst into tears"
 
   - vars:
       word: adelante
@@ -132,7 +133,7 @@ tests:
       - type: icontains
         value: "TRANSLATION: causes"
       - type: icontains
-        value: "LEMMA: cause"
+        value: "LEMMA: to cause"
 
   - vars:
       word: fanatismo
@@ -177,3 +178,79 @@ tests:
         value: "TRANSLATION: heir"
       - type: icontains
         value: "LEMMA: heir"
+
+  - description: "el arco - soccer sense, not architectural arch"
+    vars:
+      word: el arco
+      sentence: Demasiados defensas se interpusieron entre el arco y yo como para meterla yo solo.
+    assert:
+      - type: icontains
+        value: "TRANSLATION: the goal"
+      - type: not-icontains
+        value: "arch"
+
+  - description: "gancho - hook move, not pass"
+    vars:
+      word: gancho
+      sentence: Volví a cortar hacia la derecha, un rápido uno-dos de gancho, y lo rebasé como si estuviera parado.
+    assert:
+      - type: icontains
+        value: "TRANSLATION: hook"
+      - type: icontains
+        value: "LEMMA: hook"
+
+  - description: "puntería - aim, not kick"
+    vars:
+      word: puntería
+      sentence: Pero tengo una puntería increíble, los pases más creativos que jamás verás y movimientos que podrían romper Internet.
+    assert:
+      - type: icontains
+        value: "TRANSLATION: aim"
+      - type: icontains
+        value: "LEMMA: aim"
+
+  - description: "bigotes - mustache, not sideburns"
+    vars:
+      word: bigotes
+      sentence: Me doblaba en estatura, tenía bigotes y aparentaba unos dieciocho.
+    assert:
+      - type: icontains
+        value: "mustache"
+      - type: not-icontains
+        value: "sideburns"
+
+  - description: "desde - spatial 'from', not temporal 'since'"
+    vars:
+      word: desde
+      sentence: Todos los padres alentaban desde la tribuna como si fuera la Copa del Mundo y Estados Unidos estuviera en la final.
+    assert:
+      - type: icontains
+        value: "TRANSLATION: from"
+      - type: icontains
+        value: "LEMMA: from"
+
+  - description: "al rato - a while later, not 'at once'"
+    vars:
+      word: al rato
+      sentence: Pero al rato tuve otra oportunidad.
+    assert:
+      - type: not-icontains
+        value: "at once"
+
+  - description: "repartidos - divided/distributed, not awarded"
+    vars:
+      word: repartidos
+      sentence: Es considerada una de las ligas más dominantes en la CONCACAF, ya que a través de los clubes que la han representado se han ganado unos 44 títulos, repartidos entre oficiales e internacionales.
+    assert:
+      - type: regex
+        value: "(divid|distribut)"
+      - type: not-icontains
+        value: "awarded"
+
+  - description: "relieve - geographic relief (terrain), not the verb 'to relieve'. LEMMA occasionally still says 'to relieve'; TRANSLATION is what lands on the card and is what we actually assert here."
+    vars:
+      word: relieve
+      sentence: Pero la diferencia es que esas islas son volcánicas, se originaron por volcanes y por eso son islas que tienen mucho relieve, que tienen muchas montañas, mientras que en el caso de Barbados es diferente porque es una isla hecha de coral.
+    assert:
+      - type: icontains
+        value: "TRANSLATION: relief"
