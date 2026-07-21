@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - run: go test ./...
+
+      - name: fmt
+        run: |
+          gofmt_out=$(gofmt -l .)
+          if [ -n "$gofmt_out" ]; then
+            echo "Files not formatted:"
+            echo "$gofmt_out"
+            exit 1
+          fi
+
+      - name: configure ssh
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}" > ~/.ssh/homebrew-tap
+          chmod 600 ~/.ssh/homebrew-tap
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_DEPLOY_KEY_PATH: /home/runner/.ssh/homebrew-tap

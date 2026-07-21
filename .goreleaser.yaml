@@ -1,0 +1,34 @@
+version: 2
+
+builds:
+  - main: ./cmd/ankix
+    binary: ankix
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - formats: [binary]
+    name_template: "{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+brews:
+  - repository:
+      owner: joshgummersall
+      name: homebrew-ankix
+      git:
+        url: "ssh://git@github.com/joshgummersall/homebrew-ankix.git"
+        private_key: "{{ .Env.HOMEBREW_TAP_DEPLOY_KEY_PATH }}"
+    directory: Formula
+    homepage: https://github.com/joshgummersall/ankix
+    description: Generate Anki cards from Kindle vocab highlights and YouTube transcripts
+    test: |
+      system "#{bin}/ankix", "version"
