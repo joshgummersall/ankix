@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// Fetch downloads a Spanish subtitle track for url using yt-dlp, caching the
+// Fetch downloads a subtitle track in lang for url using yt-dlp, caching the
 // result under cacheDir, and returns the path to the downloaded VTT file
 // and the video's ID. It prefers manually-authored subtitles and falls
 // back to auto-generated captions if none exist.
@@ -38,7 +38,7 @@ func Fetch(url, lang, cacheDir string) (path, videoID string, err error) {
 	}
 
 	if err := runYtDlp(url, lang, out, true); err != nil {
-		return "", "", fmt.Errorf("no Spanish subtitles (manual or auto-generated) found for this video: %w", err)
+		return "", "", fmt.Errorf("no %q subtitles (manual or auto-generated) found for this video: %w", lang, err)
 	}
 
 	p, err := findSubFile(cacheDir, videoID, lang)

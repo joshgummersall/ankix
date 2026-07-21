@@ -1,3 +1,9 @@
+# This model is tuned for Spanish-to-English glossing. To study a different
+# language, fork this file: swap "Spanish" for your source language in the
+# SYSTEM prompt below, replace the MESSAGE few-shot examples with
+# word/sentence/answer triples in that language, then build it under a new
+# name with `ollama create <name> -f Modelfile` (see README.md).
+
 FROM llama3.2:3b
 
 PARAMETER temperature 0

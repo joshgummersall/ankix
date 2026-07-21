@@ -1,6 +1,6 @@
-// Package translate defines a pluggable interface for glossing a Spanish
-// word or phrase, so the source (a local LLM, a web API, ...) can be
-// swapped without touching the TUI.
+// Package translate defines a pluggable interface for glossing a word or
+// phrase in the source language being studied, so the source (a local LLM,
+// a web API, ...) can be swapped without touching the TUI.
 package translate
 
 // Provider glosses a single word or phrase.

@@ -99,8 +99,9 @@ func MarkMastered(db *sql.DB, id string) error {
 // against the dictionary actually used for each lookup (DICT_INFO.langin
 // via LOOKUPS.dict_key) rather than WORDS.lang or BOOK_INFO.lang, both of
 // which can reflect stale or wrong metadata (e.g. a book's ASIN reporting
-// "en" even though it's a Spanish edition looked up with a Spanish
-// dictionary). An empty lang returns lookups for all languages. Words
+// "en" even though it's a foreign-language edition looked up with a
+// foreign-language dictionary). An empty lang returns lookups for all
+// languages. Words
 // already marked as Mastered are excluded unless includeMastered is true.
 func Entries(db *sql.DB, lang string, includeMastered bool) ([]Entry, error) {
 	query := `

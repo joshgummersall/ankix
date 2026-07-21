@@ -71,10 +71,27 @@ terminal UI for browsing and generating cards; `review` opens an existing
 
 Flags (persistent across both subcommands):
 
-- `--deck` — Anki deck name (default `Spanish::AnkiX`)
+- `--deck` — Anki deck name (default `AnkiX`)
 - `--ankiconnect-url` — AnkiConnect URL (default `http://localhost:8765`)
 - `--ollama-url` — Ollama URL (default `http://localhost:11434`)
 - `--ollama-model` — Ollama gloss model name (default `ankix`)
 - `--sub-lang` — subtitle language code (default `es`)
 - `--cache-dir` — subtitle cache directory
 - `--no-gloss` — skip Ollama gloss lookups
+
+## Using a different language
+
+Everything except the Ollama model itself is language-agnostic — the
+`--lang`/`--sub-lang` flags just select a language code, and Kindle/subtitle
+parsing don't assume any particular language. `ollama/vocab/Modelfile` is the
+one piece that's Spanish-specific: its system prompt and few-shot examples
+are written for Spanish-to-English glossing.
+
+To study another language, fork `ollama/vocab/Modelfile` (or replace it in
+place) with a system prompt and examples for that language, then either:
+
+- run `mise run setup` (or `ankix install --model <name>`) to build it under
+  a new Ollama model name, and pass `--model`/`--ollama-model <name>` when
+  running `kindle`/`youtube`, or
+- rebuild the default `ankix` model in place if you only need one language
+  at a time.

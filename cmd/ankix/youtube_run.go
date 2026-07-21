@@ -24,7 +24,7 @@ func (g glossProvider) Gloss(word, sentence string) (string, error) {
 }
 
 func runFetch(f *youtubeFlags, url string) error {
-	fmt.Println("fetching Spanish subtitles via yt-dlp...")
+	fmt.Printf("fetching %q subtitles via yt-dlp...\n", f.subLang)
 	path, videoID, err := subtitle.Fetch(url, f.subLang, f.cacheDir)
 	if err != nil {
 		return err
