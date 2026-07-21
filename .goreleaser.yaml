@@ -20,15 +20,15 @@ archives:
 checksum:
   name_template: checksums.txt
 
-brews:
+homebrew_casks:
   - repository:
       owner: joshgummersall
       name: homebrew-ankix
       git:
         url: "ssh://git@github.com/joshgummersall/homebrew-ankix.git"
         private_key: "{{ .Env.HOMEBREW_TAP_DEPLOY_KEY_PATH }}"
-    directory: Formula
+    directory: Casks
     homepage: https://github.com/joshgummersall/ankix
     description: Generate Anki cards from Kindle vocab highlights and YouTube transcripts
-    test: |
-      system "#{bin}/ankix", "version"
+    binaries:
+      - ankix
