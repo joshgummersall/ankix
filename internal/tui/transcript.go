@@ -82,6 +82,12 @@ func (m Model) handleBrowseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+u":
 		m.moveCursorLine(-m.halfPageLines())
 		return m, nil
+	case ")":
+		m.jumpToSentence(1)
+		return m, nil
+	case "(":
+		m.jumpToSentence(-1)
+		return m, nil
 	case "g":
 		m.pendingG = true
 		return m, nil
@@ -107,6 +113,11 @@ func (m Model) handleBrowseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.state = stateVisual
 			m.visualAnchor = m.cursorWord
 		}
+		m.syncViewport()
+		return m, nil
+	case "V":
+		m.state = stateVisual
+		m.visualAnchor, m.cursorWord = m.sentenceBounds(m.cursorWord)
 		m.syncViewport()
 		return m, nil
 	case "enter":
@@ -166,6 +177,74 @@ func (m Model) halfPageLines() int {
 		return half
 	}
 	return 1
+}
+
+// jumpToSentence moves the cursor to the next (dir > 0) or previous
+// (dir < 0) sentence start — mirroring vim's )/( sentence motions. Cue
+// (caption line) boundaries don't align with sentence boundaries here (an
+// auto-caption line break can land mid-sentence), so this walks m.words
+// looking for the word after one ending in ./!/?, rather than jumping by
+// line.
+func (m *Model) jumpToSentence(dir int) {
+	if len(m.words) == 0 {
+		return
+	}
+	i := m.cursorWord
+	for {
+		i += dir
+		if i <= 0 {
+			i = 0
+			break
+		}
+		if i >= len(m.words)-1 {
+			i = len(m.words) - 1
+			break
+		}
+		if m.isSentenceStart(i) {
+			break
+		}
+	}
+	m.cursorWord = i
+	m.syncViewport()
+}
+
+// sentenceBounds returns the [start, end] word-index range (inclusive) of
+// the sentence containing word i, so V can select a whole sentence in one
+// keypress the same way vim's V selects a whole line.
+func (m Model) sentenceBounds(i int) (start, end int) {
+	start = i
+	for start > 0 && !m.isSentenceStart(start) {
+		start--
+	}
+	end = i
+	for end < len(m.words)-1 && !endsSentence(m.words[end].Text) {
+		end++
+	}
+	return start, end
+}
+
+// isSentenceStart reports whether word i begins a sentence: either it's the
+// very first word, or the word before it ends a sentence.
+func (m Model) isSentenceStart(i int) bool {
+	if i <= 0 {
+		return true
+	}
+	return endsSentence(m.words[i-1].Text)
+}
+
+// endsSentence reports whether w (a word as captured verbatim from the
+// transcript, punctuation and all) ends a sentence: it ends in ./!/? once
+// any trailing closing quote/bracket is stripped.
+func endsSentence(w string) bool {
+	w = strings.TrimRight(w, `"')]”’`)
+	if w == "" {
+		return false
+	}
+	switch w[len(w)-1] {
+	case '.', '!', '?':
+		return true
+	}
+	return false
 }
 
 func (m Model) lineOfCursor() int {

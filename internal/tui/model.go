@@ -237,6 +237,6 @@ func (m Model) helpText() string {
 	case stateSubmitting:
 		return "submitting..."
 	default:
-		return "h/l word  j/k line  ctrl+d/ctrl+u half page  gg/G top/bottom  v start selection  / search  enter confirm  ? help  q quit"
+		return "h/l word  j/k line  ctrl+d/ctrl+u half page  )/( sentence  gg/G top/bottom  v select  V select sentence  / search  enter confirm  ? help  q quit"
 	}
 }

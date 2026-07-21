@@ -12,9 +12,11 @@ var helpBindings = [][2]string{
 	{"ctrl+d / ctrl+u", "move by half page"},
 	{"gg", "jump to first word"},
 	{"G", "jump to last word"},
+	{") / (", "jump to next / previous sentence"},
 	{"/", "search transcript"},
 	{"n / N", "next / previous match"},
-	{"v", "start a sentence selection, anchored at the cursor"},
+	{"v", "start a selection, anchored at the cursor"},
+	{"V", "select the whole current sentence"},
 	{"h / l, j / k (visual)", "extend selection — move the cursor, vim-visual-mode style"},
 	{"enter", "complete selection → mark words for cards"},
 	{"h / l (word pick)", "move the word cursor"},
@@ -29,10 +31,9 @@ var helpBindings = [][2]string{
 }
 
 // overlayHelp renders the keybinding popover on top of background, centered,
-// leaving the surrounding transcript visible around it rather than blanking
-// the whole screen. Background lines under the popover are stripped of
-// their own styling (color would otherwise bleed past the popover's edges
-// once spliced) but their text stays visible.
+// leaving the surrounding transcript visible (with its original styling
+// intact, via spliceLine/ansi.Cut) around it rather than blanking the whole
+// screen.
 func (m Model) overlayHelp(background string) string {
 	var b strings.Builder
 	b.WriteString(titleStyle.Render("Keybindings"))
@@ -68,27 +69,29 @@ func (m Model) overlayHelp(background string) string {
 		if bgIdx >= len(bgLines) {
 			break
 		}
-		bgLines[bgIdx] = spliceLine(ansi.Strip(bgLines[bgIdx]), pl, left)
+		bgLines[bgIdx] = spliceLine(bgLines[bgIdx], pl, left)
 	}
 
 	return strings.Join(bgLines, "\n")
 }
 
-// spliceLine overlays styled (possibly narrower/wider) content onto a plain
+// spliceLine overlays styled (possibly narrower/wider) content onto a styled
 // background line starting at column left, padding the background with
-// spaces if it's too short and preserving anything past the overlay's
-// right edge.
-func spliceLine(plainBackground, overlay string, left int) string {
-	bgRunes := []rune(plainBackground)
-	for len(bgRunes) < left {
-		bgRunes = append(bgRunes, ' ')
+// spaces if it's too short. Uses ansi.Cut (not rune slicing) to pull out the
+// background's left/right edges so their original styling survives the
+// splice instead of being flattened to plain text.
+func spliceLine(background, overlay string, left int) string {
+	bgWidth := ansi.StringWidth(background)
+	if bgWidth < left {
+		background += strings.Repeat(" ", left-bgWidth)
+		bgWidth = left
 	}
-	leftPart := string(bgRunes[:left])
+	leftPart := ansi.Cut(background, 0, left)
 
 	rightStart := left + ansi.StringWidth(overlay)
 	var rightPart string
-	if rightStart < len(bgRunes) {
-		rightPart = string(bgRunes[rightStart:])
+	if rightStart < bgWidth {
+		rightPart = ansi.Cut(background, rightStart, bgWidth)
 	}
 	return leftPart + overlay + rightPart
 }
