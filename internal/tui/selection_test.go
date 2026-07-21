@@ -4,8 +4,6 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-
-	"github.com/joshgummersall/ankix/internal/subtitle"
 )
 
 func key(s string) tea.KeyMsg {
@@ -20,11 +18,11 @@ func key(s string) tea.KeyMsg {
 }
 
 func TestWordSelection_SpansAcrossLineBoundary(t *testing.T) {
-	cues := []subtitle.Cue{
+	lines := []Line{
 		{Text: "hoy tenemos competencia de birria va a competir México contra Estados Unidos"},
 		{Text: "estoy en Los Ángeles y voy a ir a las"},
 	}
-	m := New(Config{Transcript: &subtitle.Transcript{Cues: cues}})
+	m := New(Config{Document: &Document{Lines: lines}})
 	mi, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
 	m = mi.(Model)
 
@@ -65,8 +63,8 @@ func TestWordSelection_SpansAcrossLineBoundary(t *testing.T) {
 }
 
 func TestWordSelection_LMovesAndVStartsSelection(t *testing.T) {
-	cues := []subtitle.Cue{{Text: "la casa vieja de mi abuela"}}
-	m := New(Config{Transcript: &subtitle.Transcript{Cues: cues}})
+	lines := []Line{{Text: "la casa vieja de mi abuela"}}
+	m := New(Config{Document: &Document{Lines: lines}})
 	mi, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
 	m = mi.(Model)
 

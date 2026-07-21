@@ -10,7 +10,7 @@ import (
 	"github.com/joshgummersall/ankix/internal/anki"
 )
 
-// enterWordPick loads the selected transcript words into a fresh sentence
+// enterWordPick loads the selected document words into a fresh sentence
 // with no phrases yet — every word must be added explicitly with v, unlike
 // the Kindle review flow, which starts from already-looked-up candidates.
 func (m *Model) enterWordPick() {
@@ -19,7 +19,7 @@ func (m *Model) enterWordPick() {
 		parts = append(parts, m.words[i].Text)
 	}
 	m.sentence = strings.Join(parts, " ")
-	m.cueStart = m.cfg.Transcript.Cues[m.words[m.selWordStart].CueIndex].Start
+	m.selLineIndex = m.words[m.selWordStart].LineIndex
 	m.ps.reset(m.sentence)
 	m.ps.wordCursor = m.cursorWord - m.selWordStart
 	m.setStatus("", false)
@@ -96,13 +96,7 @@ func (m Model) submitWordPick() (tea.Model, tea.Cmd) {
 		start := m.ps.tokens[m.ps.wordTokens[p.lo]].start
 		end := m.ps.tokens[m.ps.wordTokens[p.hi]].end
 		sel := anki.WordSelection{Start: start, End: end, Gloss: p.preview}
-		var note anki.Note
-		if m.cfg.ShowTimestamps {
-			note = anki.BuildWordNote(m.cfg.Deck, m.cfg.VideoTitle, m.cfg.Transcript.VideoID, m.cueStart, m.sentence, sel)
-		} else {
-			note = anki.BuildWebWordNote(m.cfg.Deck, m.cfg.VideoTitle, m.cfg.Transcript.VideoID, m.sentence, sel)
-		}
-		notes = append(notes, note)
+		notes = append(notes, m.cfg.BuildNote(m.selLineIndex, m.sentence, sel))
 	}
 	if len(notes) == 0 {
 		m.setStatus("mark at least one word with v first", true)
@@ -155,13 +149,10 @@ func (m Model) renderWordPicker() string {
 	}
 	b.WriteString("\n\n")
 	b.WriteString(helpStyle.Render(fmt.Sprintf("%d %s will be added, deck: %s", cards, word, m.cfg.Deck)))
-	switch {
-	case m.cfg.ShowTimestamps:
-		if link := anki.VideoLink(m.cfg.Transcript.VideoID, m.cueStart); link != "" {
+	if m.cfg.PreviewLink != nil {
+		if link := m.cfg.PreviewLink(m.selLineIndex); link != "" {
 			b.WriteString("\n" + helpStyle.Render("link: "+link))
 		}
-	case m.cfg.Transcript.VideoID != "":
-		b.WriteString("\n" + helpStyle.Render("link: "+m.cfg.Transcript.VideoID))
 	}
 	b.WriteString("\n")
 

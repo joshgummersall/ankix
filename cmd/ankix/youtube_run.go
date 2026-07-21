@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -11,6 +12,11 @@ import (
 	"github.com/joshgummersall/ankix/internal/translate"
 	"github.com/joshgummersall/ankix/internal/tui"
 )
+
+func formatTS(d time.Duration) string {
+	total := int(d.Seconds())
+	return fmt.Sprintf("%02d:%02d", total/60, total%60)
+}
 
 // glossProvider adapts the shared dict/ollama Provider (which defines words
 // for the kindle flow) to translate.Provider, so youtube can reuse the same
@@ -77,13 +83,25 @@ func launchYouTubeTUI(f *youtubeFlags, transcript *subtitle.Transcript, title st
 		}
 	}
 
+	cues := transcript.Cues
+	lines := make([]tui.Line, len(cues))
+	for i, c := range cues {
+		lines[i] = tui.Line{Label: formatTS(c.Start), Text: c.Text}
+	}
+	videoID := transcript.VideoID
+
 	m := tui.New(tui.Config{
-		Transcript:     transcript,
-		VideoTitle:     title,
-		Deck:           f.deck,
-		AnkiClient:     client,
-		Translator:     translator,
-		ShowTimestamps: true,
+		Document:   &tui.Document{SourceID: videoID, Lines: lines},
+		Title:      title,
+		Deck:       f.deck,
+		AnkiClient: client,
+		Translator: translator,
+		BuildNote: func(lineIndex int, sentence string, sel anki.WordSelection) anki.Note {
+			return anki.BuildYouTubeNote(f.deck, title, videoID, cues[lineIndex].Start, sentence, sel)
+		},
+		PreviewLink: func(lineIndex int) string {
+			return anki.VideoLink(videoID, cues[lineIndex].Start)
+		},
 	})
 
 	p := tea.NewProgram(m, tea.WithAltScreen())

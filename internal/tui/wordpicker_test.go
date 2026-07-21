@@ -4,14 +4,12 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-
-	"github.com/joshgummersall/ankix/internal/subtitle"
 )
 
 func newTestWordPickModel(t *testing.T, sentence string) Model {
 	t.Helper()
-	cues := []subtitle.Cue{{Text: sentence}}
-	m := New(Config{Transcript: &subtitle.Transcript{Cues: cues}})
+	lines := []Line{{Text: sentence}}
+	m := New(Config{Document: &Document{Lines: lines}})
 	mi, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
 	m = mi.(Model)
 	m.selWordStart, m.selWordEnd = 0, len(m.words)-1

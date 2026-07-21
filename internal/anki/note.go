@@ -15,14 +15,14 @@ type WordSelection struct {
 	Gloss      string
 }
 
-// BuildWordNote constructs a Basic (Front/Back) note for a single marked
+// BuildYouTubeNote constructs a Basic (Front/Back) note for a single marked
 // word or phrase within sentence. Front is an <h1> headword followed by
 // the sentence with that word bolded/italicized — the headword is what
 // lets the same sentence generate several distinct cards (one per marked
 // word) without Anki's duplicate check (which compares the first field)
 // treating them as the same note. Back is the English gloss plus a link
 // to roughly where the word is spoken in the source video.
-func BuildWordNote(deck, videoTitle, videoID string, cueStart time.Duration, sentence string, sel WordSelection) Note {
+func BuildYouTubeNote(deck, videoTitle, videoID string, cueStart time.Duration, sentence string, sel WordSelection) Note {
 	word := sentence[sel.Start:sel.End]
 
 	front := "<h1>" + word + "</h1>" +
@@ -53,9 +53,10 @@ func BuildWordNote(deck, videoTitle, videoID string, cueStart time.Duration, sen
 	}
 }
 
-// BuildWebWordNote is BuildWordNote's counterpart for the web source: no
-// timestamp or video deep link, just a plain link to the source page.
-func BuildWebWordNote(deck, title, url, sentence string, sel WordSelection) Note {
+// BuildNote is BuildYouTubeNote's counterpart for sources with no time
+// axis (web articles, local files): no timestamp or deep link, just a
+// title and an optional plain link to the source.
+func BuildNote(deck, title, url, sourceTag, sentence string, sel WordSelection) Note {
 	word := sentence[sel.Start:sel.End]
 
 	front := "<h1>" + word + "</h1>" +
@@ -78,7 +79,7 @@ func BuildWebWordNote(deck, title, url, sentence string, sel WordSelection) Note
 			"Front": front,
 			"Back":  back.String(),
 		},
-		Tags: []string{SourceTag("Web"), WordTag(word)},
+		Tags: []string{SourceTag(sourceTag), WordTag(word)},
 		Options: &NoteOptions{
 			AllowDuplicate: false,
 			DuplicateScope: "deck",

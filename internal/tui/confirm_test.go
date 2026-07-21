@@ -6,12 +6,15 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/joshgummersall/ankix/internal/subtitle"
+	"github.com/joshgummersall/ankix/internal/anki"
 )
 
 func TestRenderWordPicker_ShowsVideoLinkForRealYouTubeID(t *testing.T) {
-	cues := []subtitle.Cue{{Text: "la casa vieja"}}
-	m := New(Config{Transcript: &subtitle.Transcript{VideoID: "dQw4w9WgXcQ", Cues: cues}, ShowTimestamps: true})
+	lines := []Line{{Text: "la casa vieja"}}
+	m := New(Config{
+		Document:    &Document{SourceID: "dQw4w9WgXcQ", Lines: lines},
+		PreviewLink: func(int) string { return anki.VideoLink("dQw4w9WgXcQ", 0) },
+	})
 	mi, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
 	m = mi.(Model)
 
@@ -29,9 +32,12 @@ func TestRenderWordPicker_ShowsVideoLinkForRealYouTubeID(t *testing.T) {
 }
 
 func TestRenderWordPicker_NoLinkForReviewLoadedTranscript(t *testing.T) {
-	cues := []subtitle.Cue{{Text: "la casa vieja"}}
-	// runReview passes the file path as VideoID, not a real YouTube ID.
-	m := New(Config{Transcript: &subtitle.Transcript{VideoID: "/tmp/sample.es.vtt", Cues: cues}, ShowTimestamps: true})
+	lines := []Line{{Text: "la casa vieja"}}
+	// runReview passes the file path as the source ID, not a real YouTube ID.
+	m := New(Config{
+		Document:    &Document{SourceID: "/tmp/sample.es.vtt", Lines: lines},
+		PreviewLink: func(int) string { return anki.VideoLink("/tmp/sample.es.vtt", 0) },
+	})
 	mi, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
 	m = mi.(Model)
 

@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -164,10 +163,10 @@ func (m *Model) moveCursorLine(delta int) {
 	if line < 0 {
 		line = 0
 	}
-	if max := len(m.cueFirstWord) - 1; line > max {
+	if max := len(m.lineFirstWord) - 1; line > max {
 		line = max
 	}
-	m.cursorWord = m.cueFirstWord[line]
+	m.cursorWord = m.lineFirstWord[line]
 	m.syncViewport()
 }
 
@@ -181,11 +180,10 @@ func (m Model) halfPageLines() int {
 }
 
 // jumpToSentence moves the cursor to the next (dir > 0) or previous
-// (dir < 0) sentence start — mirroring vim's )/( sentence motions. Cue
-// (caption line) boundaries don't align with sentence boundaries here (an
-// auto-caption line break can land mid-sentence), so this walks m.words
-// looking for the word after one ending in ./!/?, rather than jumping by
-// line.
+// (dir < 0) sentence start — mirroring vim's )/( sentence motions. Line
+// boundaries don't align with sentence boundaries here (a source's
+// segmentation can break mid-sentence), so this walks m.words looking for
+// the word after one ending in ./!/?, rather than jumping by line.
 func (m *Model) jumpToSentence(dir int) {
 	if len(m.words) == 0 {
 		return
@@ -234,8 +232,8 @@ func (m Model) isSentenceStart(i int) bool {
 }
 
 // endsSentence reports whether w (a word as captured verbatim from the
-// transcript, punctuation and all) ends a sentence: it ends in ./!/? once
-// any trailing closing quote/bracket is stripped.
+// document, punctuation and all) ends a sentence: it ends in ./!/? once any
+// trailing closing quote/bracket is stripped.
 func endsSentence(w string) bool {
 	w = strings.TrimRight(w, `"')]”’`)
 	if w == "" {
@@ -256,7 +254,7 @@ func (m Model) lineOfWord(wi int) int {
 	if len(m.words) == 0 {
 		return 0
 	}
-	return m.words[wi].CueIndex
+	return m.words[wi].LineIndex
 }
 
 // syncViewport refreshes the viewport's content (cursor/selection highlight
@@ -264,16 +262,16 @@ func (m Model) lineOfWord(wi int) int {
 // cursor's line stays visible. This must run as part of Update, not View:
 // View has a value receiver, so mutating m.viewport there (SetContent,
 // SetYOffset, ...) would only mutate a throwaway copy and silently fail to
-// persist between frames — the transcript would never actually scroll.
+// persist between frames — the document would never actually scroll.
 func (m *Model) syncViewport() {
 	if !m.ready {
 		return
 	}
-	content, cueVisualLine := m.renderTranscript()
+	content, lineVisualLine := m.renderDocument()
 	m.viewport.SetContent(content)
-	m.cueVisualLine = cueVisualLine
+	m.lineVisualLine = lineVisualLine
 
-	line := cueVisualLine[m.lineOfCursor()]
+	line := lineVisualLine[m.lineOfCursor()]
 	top := m.viewport.YOffset
 	bottom := top + m.viewport.Height
 	if line < top {
@@ -287,13 +285,13 @@ func (m *Model) jumpToNextMatch(dir int) {
 	if m.searchTerm == "" {
 		return
 	}
-	cues := m.cfg.Transcript.Cues
-	n := len(cues)
+	lines := m.cfg.Document.Lines
+	n := len(lines)
 	curLine := m.lineOfCursor()
 	for i := 1; i <= n; i++ {
 		idx := ((curLine+dir*i)%n + n) % n
-		if strings.Contains(strings.ToLower(cues[idx].Text), m.searchTerm) {
-			m.cursorWord = m.cueFirstWord[idx]
+		if strings.Contains(strings.ToLower(lines[idx].Text), m.searchTerm) {
+			m.cursorWord = m.lineFirstWord[idx]
 			m.syncViewport()
 			return
 		}
@@ -317,15 +315,15 @@ func (m Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// renderTranscript renders every cue and returns the full content along with
-// cueVisualLine, the visual (post-wrap) line each cue starts on — cues can
-// span more than one visual line once wrapped to the viewport width, so this
-// is not simply the cue index.
-func (m Model) renderTranscript() (string, []int) {
+// renderDocument renders every line and returns the full content along with
+// lineVisualLine, the visual (post-wrap) line each document line starts on —
+// lines can span more than one visual line once wrapped to the viewport
+// width, so this is not simply the line index.
+func (m Model) renderDocument() (string, []int) {
 	var b strings.Builder
-	cues := m.cfg.Transcript.Cues
+	lines := m.cfg.Document.Lines
 	curLine := m.lineOfCursor()
-	cueVisualLine := make([]int, len(cues))
+	lineVisualLine := make([]int, len(lines))
 	visual := 0
 
 	selLo, selHi := -1, -1
@@ -333,11 +331,11 @@ func (m Model) renderTranscript() (string, []int) {
 		selLo, selHi = m.visualBounds()
 	}
 
-	for i, c := range cues {
-		start := m.cueFirstWord[i]
+	for i, l := range lines {
+		start := m.lineFirstWord[i]
 		end := len(m.words)
-		if i+1 < len(m.cueFirstWord) {
-			end = m.cueFirstWord[i+1]
+		if i+1 < len(m.lineFirstWord) {
+			end = m.lineFirstWord[i+1]
 		}
 
 		lineCarded := false
@@ -356,8 +354,8 @@ func (m Model) renderTranscript() (string, []int) {
 			marker = currentLineMarkerStyle.Render("› ")
 		}
 		ts := ""
-		if m.cfg.ShowTimestamps {
-			ts = timestampStyle.Render(fmt.Sprintf("%s ", formatTS(c.Start)))
+		if l.Label != "" {
+			ts = timestampStyle.Render(l.Label + " ")
 		}
 
 		var words strings.Builder
@@ -397,16 +395,11 @@ func (m Model) renderTranscript() (string, []int) {
 			line = lipgloss.NewStyle().Width(m.viewport.Width).Render(line)
 		}
 
-		cueVisualLine[i] = visual
+		lineVisualLine[i] = visual
 		visual += strings.Count(line, "\n") + 1
 
 		b.WriteString(line)
 		b.WriteString("\n")
 	}
-	return b.String(), cueVisualLine
-}
-
-func formatTS(d time.Duration) string {
-	total := int(d.Seconds())
-	return fmt.Sprintf("%02d:%02d", total/60, total%60)
+	return b.String(), lineVisualLine
 }

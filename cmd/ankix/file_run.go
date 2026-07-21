@@ -2,33 +2,39 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/joshgummersall/ankix/internal/anki"
 	"github.com/joshgummersall/ankix/internal/dict/ollama"
+	"github.com/joshgummersall/ankix/internal/textutil"
 	"github.com/joshgummersall/ankix/internal/translate"
 	"github.com/joshgummersall/ankix/internal/tui"
-	"github.com/joshgummersall/ankix/internal/web"
 )
 
-func runWebFetch(f *webFlags, url string) error {
-	fmt.Println("fetching and extracting article...")
-	article, err := web.Fetch(url)
+func runFileOpen(f *fileFlags, path string) error {
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
 
-	lines := make([]tui.Line, len(article.Paragraphs))
-	for i, p := range article.Paragraphs {
+	paragraphs := textutil.Paragraphs(string(data))
+	if len(paragraphs) == 0 {
+		return fmt.Errorf("no readable content found in %s", path)
+	}
+
+	lines := make([]tui.Line, len(paragraphs))
+	for i, p := range paragraphs {
 		lines[i] = tui.Line{Text: p}
 	}
-	doc := &tui.Document{SourceID: article.URL, Lines: lines}
+	doc := &tui.Document{SourceID: path, Lines: lines}
 
-	return launchWebTUI(f, doc, article.Title, article.URL)
+	return launchFileTUI(f, doc, filepath.Base(path))
 }
 
-func launchWebTUI(f *webFlags, doc *tui.Document, title, url string) error {
+func launchFileTUI(f *fileFlags, doc *tui.Document, title string) error {
 	var translator translate.Provider
 	if !f.noGloss {
 		translator = glossProvider{ollama.New(f.ollamaURL, f.ollamaModel)}
@@ -55,10 +61,7 @@ func launchWebTUI(f *webFlags, doc *tui.Document, title, url string) error {
 		AnkiClient: client,
 		Translator: translator,
 		BuildNote: func(lineIndex int, sentence string, sel anki.WordSelection) anki.Note {
-			return anki.BuildNote(f.deck, title, url, "Web", sentence, sel)
-		},
-		PreviewLink: func(lineIndex int) string {
-			return url
+			return anki.BuildNote(f.deck, title, "", "File", sentence, sel)
 		},
 	})
 

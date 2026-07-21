@@ -1,5 +1,5 @@
 // Command ankix generates Anki cards from Kindle vocabulary builder
-// highlights and from YouTube video transcripts.
+// highlights, YouTube video transcripts, web articles, and local files.
 package main
 
 import (
@@ -12,12 +12,13 @@ import (
 func main() {
 	root := &cobra.Command{
 		Use:   "ankix",
-		Short: "Generate Anki cards from Kindle vocab highlights and YouTube transcripts",
+		Short: "Generate Anki cards from Kindle vocab, YouTube transcripts, web articles, and local files",
 	}
 	root.AddCommand(newInstallCmd())
 	root.AddCommand(newKindleCmd())
 	root.AddCommand(newYouTubeCmd())
 	root.AddCommand(newWebCmd())
+	root.AddCommand(newFileCmd())
 	root.AddCommand(newVersionCmd())
 
 	if err := root.Execute(); err != nil {

@@ -1,10 +1,10 @@
-// Package tui implements the Bubble Tea interface for browsing a transcript
-// with vim-style navigation and generating Anki cards from it.
+// Package tui implements the Bubble Tea interface for browsing a source
+// document (a YouTube transcript, a web article, a local file, ...) with
+// vim-style navigation and generating Anki cards from it.
 package tui
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -13,7 +13,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/joshgummersall/ankix/internal/anki"
-	"github.com/joshgummersall/ankix/internal/subtitle"
 	"github.com/joshgummersall/ankix/internal/translate"
 )
 
@@ -28,14 +27,18 @@ const (
 	stateSubmitting
 )
 
-// Config holds everything the TUI needs to run.
+// Config holds everything the TUI needs to run. BuildNote and PreviewLink
+// are supplied by the calling source (youtube/web/file) and let it decide
+// what a submitted card and its optional preview link look like, without
+// the TUI needing to know that those shapes differ.
 type Config struct {
-	Transcript     *subtitle.Transcript
-	VideoTitle     string
-	Deck           string
-	AnkiClient     *anki.Client
-	Translator     translate.Provider // nil if glossing is disabled
-	ShowTimestamps bool               // false for sources with no time axis (e.g. web articles)
+	Document    *Document
+	Title       string
+	Deck        string
+	AnkiClient  *anki.Client
+	Translator  translate.Provider // nil if glossing is disabled
+	BuildNote   func(lineIndex int, sentence string, sel anki.WordSelection) anki.Note
+	PreviewLink func(lineIndex int) string // nil, or returns "" for no link
 }
 
 // Model is the root Bubble Tea model.
@@ -48,14 +51,14 @@ type Model struct {
 	height   int
 	ready    bool
 
-	words         []subtitle.Word // every word in the transcript, in order, tagged with its source line
-	cueFirstWord  []int           // cueFirstWord[i] = index into words of cue i's first word
-	cueVisualLine []int           // cueVisualLine[i] = wrapped viewport line cue i starts on, set by syncViewport
+	words          []word // every word in the document, in order, tagged with its source line
+	lineFirstWord  []int  // lineFirstWord[i] = index into words of line i's first word
+	lineVisualLine []int  // lineVisualLine[i] = wrapped viewport line that line i starts on, set by syncViewport
 
 	cursorWord int
 	pendingG   bool
 
-	// visualAnchor is the fixed end of the in-progress transcript selection
+	// visualAnchor is the fixed end of the in-progress document selection
 	// (stateVisual), set to cursorWord when visual mode began; cursorWord is
 	// the other, moving end — see visualBounds.
 	visualAnchor int
@@ -69,10 +72,10 @@ type Model struct {
 	selWordStart, selWordEnd int // confirmed word selection, inclusive
 
 	sentence      string
-	sentenceInput textarea.Model // pre-filled with sentence while editing, for fixing transcript typos; wraps long lines
+	sentenceInput textarea.Model // pre-filled with sentence while editing, for fixing typos; wraps long lines
 	ps            phraseSet[struct{}]
 
-	cueStart time.Duration
+	selLineIndex int // line the current sentence was picked from, passed to Config.BuildNote/PreviewLink
 
 	cardedWords map[int]bool // word indices included in a submitted card
 
@@ -90,13 +93,13 @@ func New(cfg Config) Model {
 	sei.SetWidth(120)
 	sei.SetHeight(3)
 
-	words := subtitle.FlattenWords(cfg.Transcript.Cues)
-	cueFirstWord := make([]int, len(cfg.Transcript.Cues))
+	words := flattenWords(cfg.Document.Lines)
+	lineFirstWord := make([]int, len(cfg.Document.Lines))
 	last := -1
 	for i, w := range words {
-		if w.CueIndex != last {
-			cueFirstWord[w.CueIndex] = i
-			last = w.CueIndex
+		if w.LineIndex != last {
+			lineFirstWord[w.LineIndex] = i
+			last = w.LineIndex
 		}
 	}
 
@@ -107,7 +110,7 @@ func New(cfg Config) Model {
 		sentenceInput: sei,
 		cardedWords:   make(map[int]bool),
 		words:         words,
-		cueFirstWord:  cueFirstWord,
+		lineFirstWord: lineFirstWord,
 	}
 }
 
@@ -188,8 +191,8 @@ func (m Model) View() string {
 		return "loading..."
 	}
 
-	header := titleStyle.Render(m.cfg.VideoTitle) +
-		"  " + helpStyle.Render(fmt.Sprintf("%d lines loaded", len(m.cfg.Transcript.Cues)))
+	header := titleStyle.Render(m.cfg.Title) +
+		"  " + helpStyle.Render(fmt.Sprintf("%d lines loaded", len(m.cfg.Document.Lines)))
 	if m.searching {
 		header = m.searchInput.View()
 	}

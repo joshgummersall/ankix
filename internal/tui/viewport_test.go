@@ -2,22 +2,19 @@ package tui
 
 import (
 	"testing"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-
-	"github.com/joshgummersall/ankix/internal/subtitle"
 )
 
 // TestScrolling_KeepsCursorInView guards against a regression where View's
 // value receiver silently dropped viewport.SetContent, so maxYOffset was
 // always 0 and the viewport could never actually scroll.
 func TestScrolling_KeepsCursorInView(t *testing.T) {
-	var cues []subtitle.Cue
+	var lines []Line
 	for i := 0; i < 60; i++ {
-		cues = append(cues, subtitle.Cue{Start: time.Duration(i) * time.Second, Text: "line"})
+		lines = append(lines, Line{Text: "line"})
 	}
-	m := New(Config{Transcript: &subtitle.Transcript{Cues: cues}})
+	m := New(Config{Document: &Document{Lines: lines}})
 	mi, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 15})
 	m = mi.(Model)
 

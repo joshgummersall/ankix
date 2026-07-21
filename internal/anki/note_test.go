@@ -47,7 +47,7 @@ func TestBuildWordNote_BoldsWordInSentence(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			n := BuildWordNote("Deck", "Title", "vid1", 5*time.Second, c.sentence, c.sel)
+			n := BuildYouTubeNote("Deck", "Title", "vid1", 5*time.Second, c.sentence, c.sel)
 			if got := n.Fields["Front"]; !strings.Contains(got, c.wantFrontSub) {
 				t.Errorf("Front = %q, want it to contain %q", got, c.wantFrontSub)
 			}
@@ -60,8 +60,8 @@ func TestBuildWordNote_BoldsWordInSentence(t *testing.T) {
 
 func TestBuildWordNote_HeaderLetsSameSentenceYieldDistinctCards(t *testing.T) {
 	sentence := "la casa vieja"
-	n1 := BuildWordNote("Deck", "Title", "vid1", 0, sentence, WordSelection{Start: 3, End: 7})
-	n2 := BuildWordNote("Deck", "Title", "vid1", 0, sentence, WordSelection{Start: 8, End: 13})
+	n1 := BuildYouTubeNote("Deck", "Title", "vid1", 0, sentence, WordSelection{Start: 3, End: 7})
+	n2 := BuildYouTubeNote("Deck", "Title", "vid1", 0, sentence, WordSelection{Start: 8, End: 13})
 
 	if n1.Fields["Front"] == n2.Fields["Front"] {
 		t.Errorf("expected different Front fields (different headwords) for different marked words, got identical: %q", n1.Fields["Front"])
@@ -75,7 +75,7 @@ func TestBuildWordNote_HeaderLetsSameSentenceYieldDistinctCards(t *testing.T) {
 }
 
 func TestBuildWordNote_BackHasGlossAndVideoLink(t *testing.T) {
-	n := BuildWordNote("Deck", "Title", "dQw4w9WgXcQ", 65*time.Second, "la casa vieja", WordSelection{Start: 3, End: 7, Gloss: "house"})
+	n := BuildYouTubeNote("Deck", "Title", "dQw4w9WgXcQ", 65*time.Second, "la casa vieja", WordSelection{Start: 3, End: 7, Gloss: "house"})
 	back := n.Fields["Back"]
 	if !strings.Contains(back, "house") {
 		t.Errorf("Back = %q, want it to contain the gloss", back)
@@ -88,21 +88,21 @@ func TestBuildWordNote_BackHasGlossAndVideoLink(t *testing.T) {
 func TestBuildWordNote_NoLinkForNonYouTubeVideoID(t *testing.T) {
 	// The review command passes a local file path as videoID; no link
 	// should be added since it isn't a real YouTube video ID.
-	n := BuildWordNote("Deck", "Title", "/tmp/sample.es.vtt", 65*time.Second, "la casa vieja", WordSelection{Start: 3, End: 7})
+	n := BuildYouTubeNote("Deck", "Title", "/tmp/sample.es.vtt", 65*time.Second, "la casa vieja", WordSelection{Start: 3, End: 7})
 	if strings.Contains(n.Fields["Back"], "<a href") {
 		t.Errorf("Back = %q, should not contain a link for a non-YouTube videoID", n.Fields["Back"])
 	}
 }
 
 func TestBuildWordNote_VideoLinkClampsToZero(t *testing.T) {
-	n := BuildWordNote("Deck", "Title", "dQw4w9WgXcQ", 0, "la casa vieja", WordSelection{Start: 3, End: 7})
+	n := BuildYouTubeNote("Deck", "Title", "dQw4w9WgXcQ", 0, "la casa vieja", WordSelection{Start: 3, End: 7})
 	if !strings.Contains(n.Fields["Back"], "t=0") {
 		t.Errorf("Back = %q, want it to contain t=0 (clamped, not negative)", n.Fields["Back"])
 	}
 }
 
 func TestBuildWordNote_TagsIncludeWord(t *testing.T) {
-	n := BuildWordNote("Deck", "Title", "vid1", 0, "la Casa vieja", WordSelection{Start: 3, End: 7})
+	n := BuildYouTubeNote("Deck", "Title", "vid1", 0, "la Casa vieja", WordSelection{Start: 3, End: 7})
 	found := false
 	for _, tag := range n.Tags {
 		if tag == "AnkiX::Word::casa" {
