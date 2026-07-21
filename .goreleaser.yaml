@@ -32,6 +32,8 @@ homebrew_casks:
     description: Generate Anki cards from Kindle vocab highlights and YouTube transcripts
     binaries:
       - ankix
+    dependencies:
+      - formula: yt-dlp
     hooks:
       post:
         install: |
