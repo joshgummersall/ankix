@@ -1,20 +1,31 @@
 # ankix
 
-Generate Anki cards from two sources: Kindle vocabulary builder highlights,
-and YouTube video transcripts.
+**Turn Kindle vocabulary highlights and YouTube subtitles into Anki flashcards, automatically.**
+
+Reading on a Kindle and looking up words builds a vocabulary list nobody
+reviews. Watching foreign-language YouTube with subtitles surfaces words you
+want to remember and then loses them the moment the video ends. `ankix` closes
+both loops: it reads your Kindle's `vocab.db` or a video's subtitle track,
+defines each word with a local Ollama model, and syncs ready-to-study notes
+straight into Anki via AnkiConnect — no copy-pasting, no manual card writing.
+
+## Install
+
+```
+brew install --cask joshgummersall/ankix/ankix
+```
 
 ## Requirements
 
 - [Ollama](https://ollama.com/) — both the `kindle` and `youtube` commands use
   the same `ankix` model (`ollama/vocab/Modelfile`)
 - [Anki](https://apps.ankiweb.net/) running with [AnkiConnect](https://ankiweb.net/shared/info/2055492159) installed
-- Go to build; `yt-dlp` for the `youtube` command
+- `yt-dlp` for the `youtube` command
 
-## Build
+After installing, build the local Ollama model once:
 
 ```
-mise run build       # builds bin/ankix
-mise run setup       # creates the Ollama model
+ankix install
 ```
 
 ## `ankix kindle` — Kindle vocabulary builder
@@ -95,3 +106,15 @@ place) with a system prompt and examples for that language, then either:
   running `kindle`/`youtube`, or
 - rebuild the default `ankix` model in place if you only need one language
   at a time.
+
+## Development
+
+Requires Go and [mise](https://mise.jdx.dev/).
+
+```
+mise run build       # builds bin/ankix
+mise run test         # go test ./...
+mise run vet          # go vet ./...
+mise run setup        # creates the Ollama model locally
+mise run install      # builds and copies ankix to ~/.local/bin
+```
