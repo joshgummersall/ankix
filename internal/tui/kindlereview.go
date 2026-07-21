@@ -59,8 +59,9 @@ type kindleSelection struct {
 // starts expanding it; on a deleted word it restores that phrase to its
 // original single-word state; on any other word in the sentence, it first
 // adds that word as a new phrase (not from a Kindle lookup) and starts
-// expanding that. Either way, h/l then grow the phrase left/right, H/L
-// shrink it left/right, and enter confirms it (esc cancels back to before expanding,
+// expanding that. Either way, h/l then move the cursor to extend or shrink
+// the phrase (vim-visual-mode style, anchored where expanding began), and
+// enter confirms it (esc cancels back to before expanding,
 // discarding a newly added word entirely). If expanding makes two words'
 // phrases overlap, they're merged into a single card covering both. d
 // deletes a word, clearing its selection state entirely (v re-adds it).
@@ -294,7 +295,7 @@ func (m KindleModel) handlePickingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.ps.beginExpand(m.newEntryAtCursor())
 		m.state = kExpanding
-		m.setStatus("l grow right, L shrink right, h grow left, H shrink left, enter confirm, esc cancel", false)
+		m.setStatus("h/l extend selection, enter confirm, esc cancel", false)
 		return m, m.ps.debounceRefresh()
 	case "d":
 		m.ps.deleteNearestPhrase()
@@ -308,21 +309,15 @@ func (m KindleModel) handlePickingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// handleExpandingKey grows or shrinks phrases[m.ps.expandIdx] and merges it
-// with any other phrase it comes to overlap.
+// handleExpandingKey moves the cursor within phrases[m.ps.expandIdx] and
+// merges it with any other phrase it comes to overlap.
 func (m KindleModel) handleExpandingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "l":
-		m.ps.growRight()
+	case "l", "right":
+		m.ps.moveExpandCursor(1)
 		return m, m.ps.debounceRefresh()
-	case "L":
-		m.ps.shrinkRight()
-		return m, m.ps.debounceRefresh()
-	case "h":
-		m.ps.growLeft()
-		return m, m.ps.debounceRefresh()
-	case "H":
-		m.ps.shrinkLeft()
+	case "h", "left":
+		m.ps.moveExpandCursor(-1)
 		return m, m.ps.debounceRefresh()
 	case "esc":
 		m.ps.cancelExpand()
@@ -498,7 +493,7 @@ func (m KindleModel) renderKindleEditSentence() string {
 func (m KindleModel) helpText() string {
 	switch m.state {
 	case kExpanding:
-		return "h/l grow left/right  H/L shrink left/right  enter confirm  esc cancel"
+		return "h/l extend selection  enter confirm  esc cancel"
 	case kEditSentence:
 		return "enter confirm edit  esc cancel"
 	case kSubmitting:

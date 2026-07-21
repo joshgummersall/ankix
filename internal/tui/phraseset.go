@@ -97,10 +97,12 @@ type phraseSet[T any] struct {
 	// while expanding); expandOrigLo/Hi is its pre-expansion range, restored
 	// on cancelExpand. expandIsNew marks a phrase created fresh by
 	// beginExpand, so cancelExpand can remove it entirely instead of just
-	// reverting its range.
+	// reverting its range. anchor is the fixed end of the selection while
+	// expanding (vim-visual-mode style); wordCursor is the moving end.
 	expandIdx                  int
 	expandOrigLo, expandOrigHi int
 	expandIsNew                bool
+	anchor                     int
 	debounceGen                int // bumped on every expand-mode edit; a stale debounce fire is ignored
 }
 
@@ -259,36 +261,28 @@ func (ps *phraseSet[T]) moveCursorLeft() {
 	ps.wordCursor = next
 }
 
-// growRight/growLeft/shrinkRight/shrinkLeft implement l/h/L/H in expand
-// mode, operating on phrases[expandIdx].
-func (ps *phraseSet[T]) growRight() {
-	if ps.phrases[ps.expandIdx].hi < len(ps.wordTokens)-1 {
-		ps.phrases[ps.expandIdx].hi++
+// moveExpandCursor moves the cursor by delta words and recomputes
+// phrases[expandIdx] as [min(anchor,cursor), max(anchor,cursor)] — vim
+// visual-mode style: anchor stays fixed at wherever expand mode began, and
+// growing, shrinking, and reversing direction past the anchor are all just
+// moving the cursor, with no separate shrink key.
+func (ps *phraseSet[T]) moveExpandCursor(delta int) {
+	next := ps.wordCursor + delta
+	if next < 0 {
+		next = 0
 	}
+	if max := len(ps.wordTokens) - 1; next > max {
+		next = max
+	}
+	ps.wordCursor = next
+
+	lo, hi := ps.anchor, ps.wordCursor
+	if lo > hi {
+		lo, hi = hi, lo
+	}
+	ps.phrases[ps.expandIdx].lo = lo
+	ps.phrases[ps.expandIdx].hi = hi
 	ps.mergeOverlaps(ps.expandIdx)
-	ps.wordCursor = ps.phrases[ps.expandIdx].hi
-}
-
-func (ps *phraseSet[T]) shrinkRight() {
-	if ps.phrases[ps.expandIdx].hi > ps.phrases[ps.expandIdx].lo {
-		ps.phrases[ps.expandIdx].hi--
-	}
-	ps.wordCursor = ps.phrases[ps.expandIdx].hi
-}
-
-func (ps *phraseSet[T]) growLeft() {
-	if ps.phrases[ps.expandIdx].lo > 0 {
-		ps.phrases[ps.expandIdx].lo--
-	}
-	ps.mergeOverlaps(ps.expandIdx)
-	ps.wordCursor = ps.phrases[ps.expandIdx].lo
-}
-
-func (ps *phraseSet[T]) shrinkLeft() {
-	if ps.phrases[ps.expandIdx].lo < ps.phrases[ps.expandIdx].hi {
-		ps.phrases[ps.expandIdx].lo++
-	}
-	ps.wordCursor = ps.phrases[ps.expandIdx].lo
 }
 
 // beginExpand starts expand mode for the word under the cursor: restoring a
@@ -307,6 +301,16 @@ func (ps *phraseSet[T]) beginExpand(payload T) int {
 	ps.expandIsNew = !onPhrase
 	ps.expandIdx = i
 	ps.expandOrigLo, ps.expandOrigHi = ps.phrases[i].lo, ps.phrases[i].hi
+
+	// anchor is the fixed end of the selection; the cursor moves from the
+	// other end. If the cursor landed on the phrase's high edge, anchor is
+	// the low edge (and vice versa), so re-expanding an already multi-word
+	// phrase keeps its existing range intact instead of collapsing it back
+	// to one word.
+	ps.anchor = ps.phrases[i].hi
+	if ps.wordCursor == ps.phrases[i].hi {
+		ps.anchor = ps.phrases[i].lo
+	}
 	return i
 }
 

@@ -9,8 +9,6 @@ import "github.com/charmbracelet/lipgloss"
 var (
 	currentLineMarkerStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.AdaptiveColor{Light: "25", Dark: "117"}).Bold(true)
-	selectedLineStyle = lipgloss.NewStyle().Underline(true).
-				Foreground(lipgloss.AdaptiveColor{Light: "25", Dark: "117"})
 	timestampStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.AdaptiveColor{Light: "243", Dark: "246"})
 	statusStyle = lipgloss.NewStyle().
@@ -39,8 +37,21 @@ var (
 				Foreground(lipgloss.Color("0")).Bold(true)
 	markedWordCursorStyleA = markedWordStyleA.Reverse(true)
 	markedWordCursorStyleB = markedWordStyleB.Reverse(true)
-	titleStyle             = lipgloss.NewStyle().
-				Foreground(lipgloss.AdaptiveColor{Light: "25", Dark: "39"}).Bold(true)
+	// activeSelectionStyle marks the in-progress transcript visual selection
+	// (stateVisual) — the same background block used for a marked phrase in
+	// the word picker, so growing/shrinking a selection reads the same way
+	// in both places. activeSelectionCursorStyle marks the cursor's exact
+	// edge within it, same as markedWordCursorStyleA.
+	activeSelectionStyle       = markedWordStyleA
+	activeSelectionCursorStyle = markedWordCursorStyleA
+	// cardedWordStyle marks every word on a line that's already produced at
+	// least one card, distinct from (and more muted than) the active
+	// selection color so past and in-progress selections don't get confused.
+	cardedWordStyle = lipgloss.NewStyle().
+			Background(lipgloss.AdaptiveColor{Light: "194", Dark: "22"}).
+			Foreground(lipgloss.AdaptiveColor{Light: "0", Dark: "252"})
+	titleStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.AdaptiveColor{Light: "25", Dark: "39"}).Bold(true)
 	helpKeyStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.AdaptiveColor{Light: "130", Dark: "214"}).Bold(true)
 	helpPopoverStyle = lipgloss.NewStyle().

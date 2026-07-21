@@ -63,7 +63,7 @@ func (m Model) handleWordPickKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.ps.beginExpand(struct{}{})
 		m.state = stateWordExpand
-		m.setStatus("l grow right, L shrink right, h grow left, H shrink left, enter confirm, esc cancel", false)
+		m.setStatus("h/l extend selection, enter confirm, esc cancel", false)
 		return m, m.ps.debounceRefresh()
 	case "d":
 		m.ps.deleteNearestPhrase()
@@ -109,17 +109,11 @@ func (m Model) submitWordPick() (tea.Model, tea.Cmd) {
 
 func (m Model) handleWordExpandKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "l":
-		m.ps.growRight()
+	case "l", "right":
+		m.ps.moveExpandCursor(1)
 		return m, m.ps.debounceRefresh()
-	case "L":
-		m.ps.shrinkRight()
-		return m, m.ps.debounceRefresh()
-	case "h":
-		m.ps.growLeft()
-		return m, m.ps.debounceRefresh()
-	case "H":
-		m.ps.shrinkLeft()
+	case "h", "left":
+		m.ps.moveExpandCursor(-1)
 		return m, m.ps.debounceRefresh()
 	case "esc":
 		m.ps.cancelExpand()

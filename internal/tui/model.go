@@ -53,11 +53,10 @@ type Model struct {
 	cursorWord int
 	pendingG   bool
 
-	// visualLo/Hi are the independent word-index boundaries of the
-	// in-progress transcript selection (stateVisual), grown/shrunk one at a
-	// time by h/l (word) and j/k (line) — mirrors the v/h/l phrase-expansion
-	// UX used once inside word pick.
-	visualLo, visualHi int
+	// visualAnchor is the fixed end of the in-progress transcript selection
+	// (stateVisual), set to cursorWord when visual mode began; cursorWord is
+	// the other, moving end — see visualBounds.
+	visualAnchor int
 
 	searching   bool
 	searchInput textinput.Model
@@ -107,7 +106,6 @@ func New(cfg Config) Model {
 		cardedLines:   make(map[int]bool),
 		words:         words,
 		cueFirstWord:  cueFirstWord,
-		status:        fmt.Sprintf("%d lines loaded — h/l word, j/k line, v select, enter confirm, q quit", len(cfg.Transcript.Cues)),
 	}
 }
 
@@ -188,7 +186,8 @@ func (m Model) View() string {
 		return "loading..."
 	}
 
-	header := titleStyle.Render(fmt.Sprintf("ankitube — %s", m.cfg.VideoTitle))
+	header := titleStyle.Render(fmt.Sprintf("ankix :: %s", m.cfg.VideoTitle)) +
+		"  " + helpStyle.Render(fmt.Sprintf("%d lines loaded", len(m.cfg.Transcript.Cues)))
 	if m.searching {
 		header = m.searchInput.View()
 	}
@@ -228,16 +227,16 @@ func (m Model) View() string {
 func (m Model) helpText() string {
 	switch m.state {
 	case stateVisual:
-		return "h/l grow left/right  H/L shrink left/right  j/k grow down/up  J/K shrink down/up  enter complete selection  esc cancel"
+		return "h/l/j/k extend selection  enter complete selection  esc cancel"
 	case stateWordPick:
 		return "h/l move  v expand/add word  d delete word  e edit sentence  enter add all  esc cancel"
 	case stateWordExpand:
-		return "h/l grow left/right  H/L shrink left/right  enter confirm  esc cancel"
+		return "h/l extend selection  enter confirm  esc cancel"
 	case stateEditSentence:
 		return "enter save  esc discard changes"
 	case stateSubmitting:
 		return "submitting..."
 	default:
-		return "h/l word  j/k line  gg/G top/bottom  v start selection  / search  enter confirm  ? help  q quit"
+		return "h/l word  j/k line  ctrl+d/ctrl+u half page  gg/G top/bottom  v start selection  / search  enter confirm  ? help  q quit"
 	}
 }

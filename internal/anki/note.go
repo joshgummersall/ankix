@@ -61,7 +61,7 @@ func formatTimestamp(d time.Duration) string {
 }
 
 // youtubeIDRe matches a bare 11-character YouTube video ID. Cards built
-// from a locally-loaded transcript file (ankitube review) carry the file
+// from a locally-loaded transcript file (ankix youtube review) carry the file
 // path as videoID instead, which fails this check, so no (broken) link is
 // added for those.
 var youtubeIDRe = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)

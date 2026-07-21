@@ -65,88 +65,22 @@ func (m Model) handleBrowseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.syncViewport()
 		return m, nil
 	case "l", "right":
-		if m.state == stateVisual {
-			if m.visualHi < len(m.words)-1 {
-				m.visualHi++
-			}
-			m.cursorWord = m.visualHi
-			m.syncViewport()
-			return m, nil
-		}
 		m.moveCursorWord(1)
 		return m, nil
-	case "L":
-		if m.state == stateVisual {
-			if m.visualHi > m.visualLo {
-				m.visualHi--
-			}
-			m.cursorWord = m.visualHi
-			m.syncViewport()
-			return m, nil
-		}
-		return m, nil
 	case "h", "left":
-		if m.state == stateVisual {
-			if m.visualLo > 0 {
-				m.visualLo--
-			}
-			m.cursorWord = m.visualLo
-			m.syncViewport()
-			return m, nil
-		}
 		m.moveCursorWord(-1)
 		return m, nil
-	case "H":
-		if m.state == stateVisual {
-			if m.visualLo < m.visualHi {
-				m.visualLo++
-			}
-			m.cursorWord = m.visualLo
-			m.syncViewport()
-			return m, nil
-		}
-		return m, nil
 	case "j", "down":
-		if m.state == stateVisual {
-			if line := m.lineOfWord(m.visualHi) + 1; line <= len(m.cueFirstWord)-1 {
-				m.visualHi = m.cueFirstWord[line]
-			}
-			m.cursorWord = m.visualHi
-			m.syncViewport()
-			return m, nil
-		}
 		m.moveCursorLine(1)
 		return m, nil
-	case "J":
-		if m.state == stateVisual {
-			if line := m.lineOfWord(m.visualHi) - 1; line >= m.lineOfWord(m.visualLo) {
-				m.visualHi = m.cueFirstWord[line+1] - 1
-			}
-			m.cursorWord = m.visualHi
-			m.syncViewport()
-			return m, nil
-		}
-		return m, nil
 	case "k", "up":
-		if m.state == stateVisual {
-			if line := m.lineOfWord(m.visualLo) - 1; line >= 0 {
-				m.visualLo = m.cueFirstWord[line]
-			}
-			m.cursorWord = m.visualLo
-			m.syncViewport()
-			return m, nil
-		}
 		m.moveCursorLine(-1)
 		return m, nil
-	case "K":
-		if m.state == stateVisual {
-			if line := m.lineOfWord(m.visualLo) + 1; line <= m.lineOfWord(m.visualHi) {
-				m.visualLo = m.cueFirstWord[line]
-			}
-			m.cursorWord = m.visualLo
-			m.syncViewport()
-			return m, nil
-		}
+	case "ctrl+d":
+		m.moveCursorLine(m.halfPageLines())
+		return m, nil
+	case "ctrl+u":
+		m.moveCursorLine(-m.halfPageLines())
 		return m, nil
 	case "g":
 		m.pendingG = true
@@ -171,13 +105,13 @@ func (m Model) handleBrowseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.state = stateBrowse
 		} else {
 			m.state = stateVisual
-			m.visualLo, m.visualHi = m.cursorWord, m.cursorWord
+			m.visualAnchor = m.cursorWord
 		}
 		m.syncViewport()
 		return m, nil
 	case "enter":
 		if m.state == stateVisual {
-			m.selWordStart, m.selWordEnd = m.visualLo, m.visualHi
+			m.selWordStart, m.selWordEnd = m.visualBounds()
 		} else {
 			m.selWordStart, m.selWordEnd = m.cursorWord, m.cursorWord
 		}
@@ -185,6 +119,19 @@ func (m Model) handleBrowseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	return m, nil
+}
+
+// visualBounds returns the current visual selection as an inclusive [lo, hi]
+// word range: anchored at m.visualAnchor (set when visual mode began) with
+// the cursor at the other end, vim-visual-mode style — so moving the cursor
+// past the anchor flips which side it's on rather than needing a separate
+// shrink key. Valid only while m.state == stateVisual.
+func (m Model) visualBounds() (int, int) {
+	lo, hi := m.visualAnchor, m.cursorWord
+	if lo > hi {
+		lo, hi = hi, lo
+	}
+	return lo, hi
 }
 
 func (m *Model) moveCursorWord(delta int) {
@@ -210,6 +157,15 @@ func (m *Model) moveCursorLine(delta int) {
 	}
 	m.cursorWord = m.cueFirstWord[line]
 	m.syncViewport()
+}
+
+// halfPageLines returns half the viewport's height in lines (at least 1),
+// for ctrl+u/ctrl+d half-page scrolling.
+func (m Model) halfPageLines() int {
+	if half := m.viewport.Height / 2; half > 0 {
+		return half
+	}
+	return 1
 }
 
 func (m Model) lineOfCursor() int {
@@ -286,7 +242,7 @@ func (m Model) renderTranscript() string {
 
 	selLo, selHi := -1, -1
 	if m.state == stateVisual {
-		selLo, selHi = m.visualLo, m.visualHi
+		selLo, selHi = m.visualBounds()
 	}
 
 	for i, c := range cues {
@@ -308,14 +264,31 @@ func (m Model) renderTranscript() string {
 		var words strings.Builder
 		for wi := start; wi < end; wi++ {
 			if wi > start {
-				words.WriteString(" ")
+				// Style the separator too when both neighboring words share
+				// the same highlight, so a multi-word selection (or a
+				// carded line) reads as one continuous background block
+				// instead of disjoint per-word chips.
+				sep := " "
+				switch {
+				case selLo != -1 && wi-1 >= selLo && wi <= selHi:
+					sep = activeSelectionStyle.Render(sep)
+				case m.cardedLines[i]:
+					sep = cardedWordStyle.Render(sep)
+				}
+				words.WriteString(sep)
 			}
 			text := m.words[wi].Text
 			switch {
+			case selLo != -1 && wi >= selLo && wi <= selHi:
+				if wi == m.cursorWord {
+					text = activeSelectionCursorStyle.Render(text)
+				} else {
+					text = activeSelectionStyle.Render(text)
+				}
 			case wi == m.cursorWord:
 				text = wordCursorStyle.Render(text)
-			case selLo != -1 && wi >= selLo && wi <= selHi:
-				text = selectedLineStyle.Render(text)
+			case m.cardedLines[i]:
+				text = cardedWordStyle.Render(text)
 			}
 			words.WriteString(text)
 		}
