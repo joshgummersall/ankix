@@ -250,6 +250,9 @@ func (m Model) handleWordPickKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "l", "right", "tab":
 		next := m.wordCursor + 1
+		if i, ok := m.phraseAt(m.wordCursor); ok {
+			next = m.phrases[i].hi + 1
+		}
 		if next > len(m.wordTokens)-1 {
 			next = len(m.wordTokens) - 1
 		}
@@ -260,6 +263,9 @@ func (m Model) handleWordPickKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "h", "left", "shift+tab":
 		next := m.wordCursor - 1
+		if i, ok := m.phraseAt(m.wordCursor); ok {
+			next = m.phrases[i].lo - 1
+		}
 		if next < 0 {
 			next = 0
 		}
@@ -384,9 +390,29 @@ func (m Model) renderEditSentence() string {
 func (m Model) renderWordPicker() string {
 	var b strings.Builder
 
+	// nextWordPhrase looks ahead to the word position that follows a given
+	// token index, so separators between two words of the same phrase can
+	// be highlighted too (otherwise a multi-word phrase renders as
+	// disjoint per-word chips instead of one continuous highlight).
+	nextWordPhrase := func(fromToken, fromWordPos int) (int, bool) {
+		wp := fromWordPos
+		for _, t := range m.tokens[fromToken:] {
+			if t.isWord {
+				wp++
+				return m.phraseAt(wp)
+			}
+		}
+		return 0, false
+	}
+
+	// cursorPhrase is the phrase (if any) the cursor currently sits in, so
+	// the whole phrase gets the cursor style rather than just the one word
+	// the cursor happens to be on.
+	cursorPhrase, cursorInPhrase := m.phraseAt(m.wordCursor)
+
 	wordPos := -1
 	lastPhrase, toggle := -1, false
-	for _, t := range m.tokens {
+	for idx, t := range m.tokens {
 		text := m.sentence[t.start:t.end]
 		if t.isWord {
 			wordPos++
@@ -395,9 +421,13 @@ func (m Model) renderWordPicker() string {
 					toggle = !toggle
 					lastPhrase = i
 				}
-				text = phraseStyle(toggle, wordPos == m.wordCursor).Render(text)
+				text = phraseStyle(toggle, cursorInPhrase && i == cursorPhrase).Render(text)
 			} else if wordPos == m.wordCursor {
 				text = wordCursorStyle.Render(text)
+			}
+		} else if prevPhrase, ok := m.phraseAt(wordPos); ok {
+			if nextPhrase, ok := nextWordPhrase(idx+1, wordPos); ok && nextPhrase == prevPhrase {
+				text = phraseStyle(toggle, cursorInPhrase && prevPhrase == cursorPhrase).Render(text)
 			}
 		}
 		b.WriteString(text)
