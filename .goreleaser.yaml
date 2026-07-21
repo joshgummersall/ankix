@@ -32,3 +32,9 @@ homebrew_casks:
     description: Generate Anki cards from Kindle vocab highlights and YouTube transcripts
     binaries:
       - ankix
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}"]
+          end
