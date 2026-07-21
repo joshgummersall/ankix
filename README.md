@@ -1,13 +1,15 @@
 # ankix
 
-**Turn Kindle vocabulary highlights and YouTube subtitles into Anki flashcards, automatically.**
+**Turn words you look up while reading, watching, or browsing into contextual Anki translations.**
 
 Reading on a Kindle and looking up words builds a vocabulary list nobody
 reviews. Watching foreign-language YouTube with subtitles surfaces words you
-want to remember and then loses them the moment the video ends. `ankix` closes
-both loops: it reads your Kindle's `vocab.db` or a video's subtitle track,
-defines each word with a local Ollama model, and syncs ready-to-study notes
-straight into Anki via AnkiConnect — no copy-pasting, no manual card writing.
+want to remember and then loses them the moment the video ends. Reading an
+article in another language means alt-tabbing to a dictionary for every other
+word. `ankix` closes those loops: it reads your Kindle's `vocab.db`, a video's
+subtitle track, or a web article, defines each word with a local Ollama model
+using the sentence it appears in — not just a bare dictionary entry — and
+syncs ready-to-study notes straight into Anki via AnkiConnect.
 
 ## Install
 
@@ -17,8 +19,8 @@ brew install --cask joshgummersall/ankix/ankix
 
 ## Requirements
 
-- [Ollama](https://ollama.com/) — both the `kindle` and `youtube` commands use
-  the same `ankix` model (`ollama/vocab/Modelfile`)
+- [Ollama](https://ollama.com/) — the `kindle`, `youtube`, and `web` commands
+  all use the same `ankix` model (`ollama/vocab/Modelfile`)
 - [Anki](https://apps.ankiweb.net/) running with [AnkiConnect](https://ankiweb.net/shared/info/2055492159) installed
 - `yt-dlp` for the `youtube` command
 
@@ -88,6 +90,24 @@ Flags (persistent across both subcommands):
 - `--ollama-model` — Ollama gloss model name (default `ankix`)
 - `--sub-lang` — subtitle language code (default `es`)
 - `--cache-dir` — subtitle cache directory
+- `--no-gloss` — skip Ollama gloss lookups
+
+## `ankix web` — Web articles
+
+```
+ankix web fetch <url>
+```
+
+Fetches and extracts the article text from a URL, then opens it in a
+terminal UI for browsing and generating cards — the same TUI used by
+`ankix youtube`.
+
+Flags:
+
+- `--deck` — Anki deck name (default `AnkiX`)
+- `--ankiconnect-url` — AnkiConnect URL (default `http://localhost:8765`)
+- `--ollama-url` — Ollama URL (default `http://localhost:11434`)
+- `--ollama-model` — Ollama gloss model name (default `ankix`)
 - `--no-gloss` — skip Ollama gloss lookups
 
 ## Using a different language

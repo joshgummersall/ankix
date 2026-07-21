@@ -29,7 +29,7 @@ homebrew_casks:
         private_key: "{{ .Env.HOMEBREW_TAP_DEPLOY_KEY_PATH }}"
     directory: Casks
     homepage: https://github.com/joshgummersall/ankix
-    description: Generate Anki cards from Kindle vocab highlights and YouTube transcripts
+    description: Generate contextual Anki translations from Kindle vocab highlights, YouTube transcripts, and web articles
     binaries:
       - ankix
     dependencies:
