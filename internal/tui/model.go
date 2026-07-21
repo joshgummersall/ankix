@@ -69,21 +69,7 @@ type Model struct {
 
 	sentence      string
 	sentenceInput textarea.Model // pre-filled with sentence while editing, for fixing transcript typos; wraps long lines
-	tokens        []token
-	wordTokens    []int // indices into tokens that are words
-	wordCursor    int   // index into wordTokens
-
-	phrases []wpPhrase // live phrase state for the sentence currently being reviewed, each becomes its own card
-
-	// expandIdx is the phrase currently being grown (valid only in
-	// stateWordExpand); expandOrigLo/Hi is its pre-expansion range,
-	// restored on esc. expandIsNew marks a phrase created by pressing v on
-	// a word with no phrase of its own, so esc can remove it entirely
-	// instead of just reverting its range.
-	expandIdx                  int
-	expandOrigLo, expandOrigHi int
-	expandIsNew                bool
-	debounceGen                int // bumped on every expand-mode edit; a stale debounce fire is ignored
+	ps            phraseSet[struct{}]
 
 	cueStart time.Duration
 
@@ -152,17 +138,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 
-	case wpDebounceMsg:
-		if msg.gen != m.debounceGen {
+	case debounceExpandMsg:
+		if msg.gen != m.ps.debounceGen {
 			return m, nil
 		}
 		return m, m.refreshGlosses()
 
 	case glossResultMsg:
-		if msg.idx < len(m.phrases) && m.phrases[msg.idx].glossText == msg.text {
-			m.phrases[msg.idx].glossPending = false
-			m.phrases[msg.idx].gloss = msg.gloss
-			m.phrases[msg.idx].glossErr = msg.err
+		if msg.idx < len(m.ps.phrases) && m.ps.phrases[msg.idx].previewText == msg.text {
+			m.ps.phrases[msg.idx].previewPending = false
+			m.ps.phrases[msg.idx].preview = msg.gloss
+			m.ps.phrases[msg.idx].previewErr = msg.err
 		}
 		return m, nil
 

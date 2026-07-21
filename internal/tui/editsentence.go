@@ -48,17 +48,7 @@ func (m *Model) applyEditedSentence(edited string) tea.Cmd {
 	}
 
 	m.sentence = edited
-	m.tokens = tokenize(m.sentence)
-	m.phrases = nil
-
-	m.wordTokens = m.wordTokens[:0]
-	for i, t := range m.tokens {
-		if t.isWord {
-			m.wordTokens = append(m.wordTokens, i)
-		}
-	}
-
-	m.wordCursor = 0
+	m.ps.reset(m.sentence)
 	m.state = stateWordPick
 	m.setStatus("sentence edited — previous word marks were cleared", false)
 	return nil

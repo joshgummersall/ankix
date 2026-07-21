@@ -2,87 +2,13 @@ package tui
 
 import (
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/joshgummersall/ankix/internal/anki"
 )
-
-// token is a slice of the working sentence: either a word (matched by
-// wordRe) or a separator (whitespace/punctuation) run between words.
-type token struct {
-	start, end int
-	isWord     bool
-}
-
-var wordRe = regexp.MustCompile(`[\p{L}]+`)
-
-func tokenize(s string) []token {
-	var tokens []token
-	last := 0
-	for _, loc := range wordRe.FindAllStringIndex(s, -1) {
-		if loc[0] > last {
-			tokens = append(tokens, token{start: last, end: loc[0], isWord: false})
-		}
-		tokens = append(tokens, token{start: loc[0], end: loc[1], isWord: true})
-		last = loc[1]
-	}
-	if last < len(s) {
-		tokens = append(tokens, token{start: last, end: len(s), isWord: false})
-	}
-	return tokens
-}
-
-// phraseStyle picks between the two alternating phrase colors (so adjacent
-// but separately-selected phrases stay visually distinct) and their
-// cursor variants. Shared by both the YouTube and Kindle pickers.
-func phraseStyle(toggle, isCursor bool) lipgloss.Style {
-	switch {
-	case isCursor && toggle:
-		return markedWordCursorStyleB
-	case isCursor:
-		return markedWordCursorStyleA
-	case toggle:
-		return markedWordStyleB
-	default:
-		return markedWordStyleA
-	}
-}
-
-// wpDebounce is how long expand mode waits after the last grow/shrink key
-// before kicking off a gloss lookup for the phrase's current bounds, so
-// rapid-fire growing doesn't fire a lookup per keystroke.
-const wpDebounce = 350 * time.Millisecond
-
-// wpPhrase is a live, editable word/phrase within the sentence currently
-// being reviewed, mirroring internal/tui/kindlereview.go's kindlePhrase.
-// lo/hi are word-token indices (into m.wordTokens), inclusive. defaultLo/Hi
-// record its original single-word position so deleting and later
-// re-adding it resets cleanly. deleted fully clears the word's selection
-// state — excluded from the batch, rendered with no highlight, as if it
-// had never been added. mergedInto is -1 for a standalone phrase;
-// otherwise it's the index of another phrase this one was absorbed into
-// after an expansion made the two overlap, and lo/hi/deleted are stale.
-type wpPhrase struct {
-	lo, hi               int
-	defaultLo, defaultHi int
-	deleted              bool
-	mergedInto           int
-
-	// Gloss lookup for the phrase's current text, so a preview can be shown
-	// before submitting. glossText is the phrase text the lookup below
-	// applies to — once lo/hi/text changes, it no longer matches and a
-	// fresh lookup is due (see refreshGlosses).
-	glossText    string
-	gloss        string
-	glossErr     error
-	glossPending bool
-}
 
 // enterWordPick loads the selected transcript words into a fresh sentence
 // with no phrases yet — every word must be added explicitly with v, unlike
@@ -94,151 +20,26 @@ func (m *Model) enterWordPick() {
 	}
 	m.sentence = strings.Join(parts, " ")
 	m.cueStart = m.cfg.Transcript.Cues[m.words[m.selWordStart].CueIndex].Start
-	m.tokens = tokenize(m.sentence)
-	m.phrases = nil
+	m.ps.reset(m.sentence)
 	m.setStatus("", false)
-
-	m.wordTokens = m.wordTokens[:0]
-	for i, t := range m.tokens {
-		if t.isWord {
-			m.wordTokens = append(m.wordTokens, i)
-		}
-	}
-	m.wordCursor = 0
 	m.state = stateWordPick
 }
 
-// phraseAt returns the index of the standalone (non-deleted, non-merged)
-// phrase whose range contains pos, or (-1, false) if there isn't one.
-func (m *Model) phraseAt(pos int) (int, bool) {
-	for i, p := range m.phrases {
-		if p.mergedInto != -1 || p.deleted {
-			continue
-		}
-		if pos >= p.lo && pos <= p.hi {
-			return i, true
-		}
-	}
-	return -1, false
-}
-
-func (m *Model) phraseAtCursor() (int, bool) {
-	return m.phraseAt(m.wordCursor)
-}
-
-// deletedPhraseAtCursor returns the index of a deleted, standalone phrase
-// whose original (pre-deletion) word position is under the cursor, or
-// (-1, false) if there isn't one — used so v on a deleted word restores it
-// instead of creating a brand new phrase alongside it.
-func (m *Model) deletedPhraseAtCursor() (int, bool) {
-	for i, p := range m.phrases {
-		if p.mergedInto != -1 || !p.deleted {
-			continue
-		}
-		if m.wordCursor >= p.defaultLo && m.wordCursor <= p.defaultHi {
-			return i, true
-		}
-	}
-	return -1, false
-}
-
-// nearestPhrase returns the index into m.phrases whose range is closest to
-// m.wordCursor (0 if the cursor is already within it), ties broken toward
-// the lowest index. Deleted/merged phrases are ignored.
-func (m *Model) nearestPhrase() int {
-	best, bestDist := -1, -1
-	for i, p := range m.phrases {
-		if p.mergedInto != -1 || p.deleted {
-			continue
-		}
-		dist := 0
-		switch {
-		case m.wordCursor < p.lo:
-			dist = p.lo - m.wordCursor
-		case m.wordCursor > p.hi:
-			dist = m.wordCursor - p.hi
-		}
-		if bestDist == -1 || dist < bestDist {
-			best, bestDist = i, dist
-		}
-	}
-	if best == -1 {
-		return 0
-	}
-	return best
-}
-
-// addPhraseAtCursor adds a new single-word phrase for the word under the
-// cursor and returns its index (always the new last element of m.phrases).
-func (m *Model) addPhraseAtCursor() int {
-	m.phrases = append(m.phrases, wpPhrase{lo: m.wordCursor, hi: m.wordCursor, defaultLo: m.wordCursor, defaultHi: m.wordCursor, mergedInto: -1})
-	return len(m.phrases) - 1
-}
-
-// mergeOverlaps folds any other standalone phrase whose range now overlaps
-// phrases[i] into phrases[i], growing i's range to cover the union. Called
-// after every expansion so merges happen live as soon as two words' phrases
-// touch.
-func (m *Model) mergeOverlaps(i int) {
-	for j := range m.phrases {
-		if j == i || m.phrases[j].mergedInto != -1 || m.phrases[j].deleted {
-			continue
-		}
-		if m.phrases[j].hi < m.phrases[i].lo || m.phrases[j].lo > m.phrases[i].hi {
-			continue
-		}
-		if m.phrases[j].lo < m.phrases[i].lo {
-			m.phrases[i].lo = m.phrases[j].lo
-		}
-		if m.phrases[j].hi > m.phrases[i].hi {
-			m.phrases[i].hi = m.phrases[j].hi
-		}
-		for k := range m.phrases {
-			if m.phrases[k].mergedInto == j {
-				m.phrases[k].mergedInto = i
-			}
-		}
-		m.phrases[j].mergedInto = i
-	}
-}
-
 // refreshGlosses kicks off a gloss lookup for every non-deleted, standalone
-// phrase whose current text hasn't been looked up yet (or has changed
-// since it last was, e.g. after an expansion or merge), so a preview of
-// what will be saved is visible before submitting.
+// phrase whose current text hasn't been looked up yet (or has changed since
+// it last was, e.g. after an expansion or merge), so a preview of what will
+// be saved is visible before submitting.
 func (m *Model) refreshGlosses() tea.Cmd {
 	if m.cfg.Translator == nil {
 		return nil
 	}
-	var cmds []tea.Cmd
-	for i := range m.phrases {
-		p := &m.phrases[i]
-		if p.mergedInto != -1 || p.deleted {
-			continue
-		}
-		text := m.sentence[m.tokens[m.wordTokens[p.lo]].start:m.tokens[m.wordTokens[p.hi]].end]
-		if p.glossText == text {
-			continue
-		}
-		p.glossText = text
-		p.gloss = ""
-		p.glossErr = nil
-		p.glossPending = true
-		cmds = append(cmds, fetchGlossCmd(m.cfg.Translator, text, m.sentence, i, text))
+	text := func(p *phrase[struct{}]) string {
+		return m.sentence[m.ps.tokens[m.ps.wordTokens[p.lo]].start:m.ps.tokens[m.ps.wordTokens[p.hi]].end]
 	}
-	return tea.Batch(cmds...)
-}
-
-func (m *Model) debounceGlossRefresh() tea.Cmd {
-	m.debounceGen++
-	gen := m.debounceGen
-	return tea.Tick(wpDebounce, func(time.Time) tea.Msg {
-		return wpDebounceMsg{gen: gen}
-	})
-}
-
-type wpDebounceMsg struct {
-	gen int
+	lookup := func(i int, text string) tea.Cmd {
+		return fetchGlossCmd(m.cfg.Translator, text, m.sentence, i, text)
+	}
+	return m.ps.refreshPreviews(text, lookup)
 }
 
 func (m Model) handleWordPickKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -249,61 +50,23 @@ func (m Model) handleWordPickKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.syncViewport()
 		return m, nil
 	case "l", "right":
-		next := m.wordCursor + 1
-		if i, ok := m.phraseAt(m.wordCursor); ok {
-			next = m.phrases[i].hi + 1
-		}
-		if next > len(m.wordTokens)-1 {
-			next = len(m.wordTokens) - 1
-		}
-		if i, ok := m.phraseAt(next); ok && m.phrases[i].hi > m.phrases[i].lo {
-			next = m.phrases[i].hi
-		}
-		m.wordCursor = next
+		m.ps.moveCursorRight()
 		return m, nil
 	case "h", "left":
-		next := m.wordCursor - 1
-		if i, ok := m.phraseAt(m.wordCursor); ok {
-			next = m.phrases[i].lo - 1
-		}
-		if next < 0 {
-			next = 0
-		}
-		if i, ok := m.phraseAt(next); ok && m.phrases[i].hi > m.phrases[i].lo {
-			next = m.phrases[i].lo
-		}
-		m.wordCursor = next
+		m.ps.moveCursorLeft()
 		return m, nil
 	case "e":
 		return m, m.enterEditSentence()
 	case "v":
-		if len(m.wordTokens) == 0 {
+		if len(m.ps.wordTokens) == 0 {
 			return m, nil
 		}
-		var i int
-		var onPhrase bool
-		if i, onPhrase = m.deletedPhraseAtCursor(); onPhrase {
-			m.phrases[i].deleted = false
-			m.phrases[i].lo, m.phrases[i].hi = m.phrases[i].defaultLo, m.phrases[i].defaultHi
-		} else if i, onPhrase = m.phraseAtCursor(); !onPhrase {
-			i = m.addPhraseAtCursor()
-		}
-		m.expandIsNew = !onPhrase
-		m.expandIdx = i
-		m.expandOrigLo, m.expandOrigHi = m.phrases[i].lo, m.phrases[i].hi
+		m.ps.beginExpand(struct{}{})
 		m.state = stateWordExpand
 		m.setStatus("l grow right, L shrink right, h grow left, H shrink left, enter confirm, esc cancel", false)
-		return m, m.debounceGlossRefresh()
+		return m, m.ps.debounceRefresh()
 	case "d":
-		if len(m.phrases) == 0 {
-			return m, nil
-		}
-		i := m.nearestPhrase()
-		m.phrases[i].deleted = true
-		m.phrases[i].glossText = ""
-		m.phrases[i].gloss = ""
-		m.phrases[i].glossErr = nil
-		m.phrases[i].glossPending = false
+		m.ps.deleteNearestPhrase()
 		m.setStatus("", false)
 		return m, nil
 	case "enter":
@@ -314,24 +77,24 @@ func (m Model) handleWordPickKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// submitWordPick builds a card for every non-deleted phrase in the
-// sentence and submits them all in one action.
+// submitWordPick builds a card for every non-deleted phrase in the sentence
+// and submits them all in one action.
 func (m Model) submitWordPick() (tea.Model, tea.Cmd) {
-	for _, p := range m.phrases {
-		if p.mergedInto == -1 && !p.deleted && p.glossPending {
+	for _, p := range m.ps.phrases {
+		if p.mergedInto == -1 && !p.deleted && p.previewPending {
 			m.setStatus("still looking up glosses...", false)
 			return m, nil
 		}
 	}
 
 	var notes []anki.Note
-	for _, p := range m.phrases {
+	for _, p := range m.ps.phrases {
 		if p.mergedInto != -1 || p.deleted {
 			continue
 		}
-		start := m.tokens[m.wordTokens[p.lo]].start
-		end := m.tokens[m.wordTokens[p.hi]].end
-		sel := anki.WordSelection{Start: start, End: end, Gloss: p.gloss}
+		start := m.ps.tokens[m.ps.wordTokens[p.lo]].start
+		end := m.ps.tokens[m.ps.wordTokens[p.hi]].end
+		sel := anki.WordSelection{Start: start, End: end, Gloss: p.preview}
 		notes = append(notes, anki.BuildWordNote(m.cfg.Deck, m.cfg.VideoTitle, m.cfg.Transcript.VideoID, m.cueStart, m.sentence, sel))
 	}
 	if len(notes) == 0 {
@@ -347,43 +110,19 @@ func (m Model) submitWordPick() (tea.Model, tea.Cmd) {
 func (m Model) handleWordExpandKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "l":
-		if m.phrases[m.expandIdx].hi < len(m.wordTokens)-1 {
-			m.phrases[m.expandIdx].hi++
-		}
-		m.mergeOverlaps(m.expandIdx)
-		m.wordCursor = m.phrases[m.expandIdx].hi
-		return m, m.debounceGlossRefresh()
+		m.ps.growRight()
+		return m, m.ps.debounceRefresh()
 	case "L":
-		if m.phrases[m.expandIdx].hi > m.phrases[m.expandIdx].lo {
-			m.phrases[m.expandIdx].hi--
-		}
-		m.wordCursor = m.phrases[m.expandIdx].hi
-		return m, m.debounceGlossRefresh()
+		m.ps.shrinkRight()
+		return m, m.ps.debounceRefresh()
 	case "h":
-		if m.phrases[m.expandIdx].lo > 0 {
-			m.phrases[m.expandIdx].lo--
-		}
-		m.mergeOverlaps(m.expandIdx)
-		m.wordCursor = m.phrases[m.expandIdx].lo
-		return m, m.debounceGlossRefresh()
+		m.ps.growLeft()
+		return m, m.ps.debounceRefresh()
 	case "H":
-		if m.phrases[m.expandIdx].lo < m.phrases[m.expandIdx].hi {
-			m.phrases[m.expandIdx].lo++
-		}
-		m.wordCursor = m.phrases[m.expandIdx].lo
-		return m, m.debounceGlossRefresh()
+		m.ps.shrinkLeft()
+		return m, m.ps.debounceRefresh()
 	case "esc":
-		for j := range m.phrases {
-			if m.phrases[j].mergedInto == m.expandIdx {
-				m.phrases[j].mergedInto = -1
-			}
-		}
-		if m.expandIsNew {
-			m.phrases = m.phrases[:m.expandIdx]
-		} else {
-			m.phrases[m.expandIdx].lo = m.expandOrigLo
-			m.phrases[m.expandIdx].hi = m.expandOrigHi
-		}
+		m.ps.cancelExpand()
 		m.state = stateWordPick
 		m.setStatus("", false)
 		return m, m.refreshGlosses()
@@ -401,52 +140,10 @@ func (m Model) renderEditSentence() string {
 
 func (m Model) renderWordPicker() string {
 	var b strings.Builder
-
-	// nextWordPhrase looks ahead to the word position that follows a given
-	// token index, so separators between two words of the same phrase can
-	// be highlighted too (otherwise a multi-word phrase renders as
-	// disjoint per-word chips instead of one continuous highlight).
-	nextWordPhrase := func(fromToken, fromWordPos int) (int, bool) {
-		wp := fromWordPos
-		for _, t := range m.tokens[fromToken:] {
-			if t.isWord {
-				wp++
-				return m.phraseAt(wp)
-			}
-		}
-		return 0, false
-	}
-
-	// cursorPhrase is the phrase (if any) the cursor currently sits in, so
-	// the whole phrase gets the cursor style rather than just the one word
-	// the cursor happens to be on.
-	cursorPhrase, cursorInPhrase := m.phraseAt(m.wordCursor)
-
-	wordPos := -1
-	lastPhrase, toggle := -1, false
-	for idx, t := range m.tokens {
-		text := m.sentence[t.start:t.end]
-		if t.isWord {
-			wordPos++
-			if i, ok := m.phraseAt(wordPos); ok {
-				if i != lastPhrase {
-					toggle = !toggle
-					lastPhrase = i
-				}
-				text = phraseStyle(toggle, cursorInPhrase && i == cursorPhrase).Render(text)
-			} else if wordPos == m.wordCursor {
-				text = wordCursorStyle.Render(text)
-			}
-		} else if prevPhrase, ok := m.phraseAt(wordPos); ok {
-			if nextPhrase, ok := nextWordPhrase(idx+1, wordPos); ok && nextPhrase == prevPhrase {
-				text = phraseStyle(toggle, cursorInPhrase && prevPhrase == cursorPhrase).Render(text)
-			}
-		}
-		b.WriteString(text)
-	}
+	b.WriteString(m.ps.render(m.sentence))
 
 	cards := 0
-	for _, p := range m.phrases {
+	for _, p := range m.ps.phrases {
 		if p.mergedInto == -1 && !p.deleted {
 			cards++
 		}
@@ -463,23 +160,23 @@ func (m Model) renderWordPicker() string {
 	b.WriteString("\n")
 
 	if m.cfg.Translator != nil {
-		ordered := make([]wpPhrase, len(m.phrases))
-		copy(ordered, m.phrases)
+		ordered := make([]phrase[struct{}], len(m.ps.phrases))
+		copy(ordered, m.ps.phrases)
 		sort.Slice(ordered, func(i, j int) bool { return ordered[i].lo < ordered[j].lo })
 		for _, p := range ordered {
 			if p.mergedInto != -1 || p.deleted {
 				continue
 			}
-			phrase := m.sentence[m.tokens[m.wordTokens[p.lo]].start:m.tokens[m.wordTokens[p.hi]].end]
+			text := m.sentence[m.ps.tokens[m.ps.wordTokens[p.lo]].start:m.ps.tokens[m.ps.wordTokens[p.hi]].end]
 			switch {
-			case p.glossPending:
-				fmt.Fprintf(&b, "%s: looking up...\n", phrase)
-			case p.glossErr != nil:
-				fmt.Fprintf(&b, "%s: lookup failed (%v)\n", phrase, p.glossErr)
-			case p.gloss == "":
-				fmt.Fprintf(&b, "%s: (none)\n", phrase)
+			case p.previewPending:
+				fmt.Fprintf(&b, "%s: looking up...\n", text)
+			case p.previewErr != nil:
+				fmt.Fprintf(&b, "%s: lookup failed (%v)\n", text, p.previewErr)
+			case p.preview == "":
+				fmt.Fprintf(&b, "%s: (none)\n", text)
 			default:
-				fmt.Fprintf(&b, "%s: %s\n", phrase, p.gloss)
+				fmt.Fprintf(&b, "%s: %s\n", text, p.preview)
 			}
 		}
 	}
