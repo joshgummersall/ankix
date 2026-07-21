@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -268,9 +269,11 @@ func (m *Model) syncViewport() {
 	if !m.ready {
 		return
 	}
-	m.viewport.SetContent(m.renderTranscript())
+	content, cueVisualLine := m.renderTranscript()
+	m.viewport.SetContent(content)
+	m.cueVisualLine = cueVisualLine
 
-	line := m.lineOfCursor()
+	line := cueVisualLine[m.lineOfCursor()]
 	top := m.viewport.YOffset
 	bottom := top + m.viewport.Height
 	if line < top {
@@ -314,10 +317,16 @@ func (m Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m Model) renderTranscript() string {
+// renderTranscript renders every cue and returns the full content along with
+// cueVisualLine, the visual (post-wrap) line each cue starts on — cues can
+// span more than one visual line once wrapped to the viewport width, so this
+// is not simply the cue index.
+func (m Model) renderTranscript() (string, []int) {
 	var b strings.Builder
 	cues := m.cfg.Transcript.Cues
 	curLine := m.lineOfCursor()
+	cueVisualLine := make([]int, len(cues))
+	visual := 0
 
 	selLo, selHi := -1, -1
 	if m.state == stateVisual {
@@ -346,7 +355,10 @@ func (m Model) renderTranscript() string {
 		case i == curLine:
 			marker = currentLineMarkerStyle.Render("› ")
 		}
-		ts := timestampStyle.Render(fmt.Sprintf("%s ", formatTS(c.Start)))
+		ts := ""
+		if m.cfg.ShowTimestamps {
+			ts = timestampStyle.Render(fmt.Sprintf("%s ", formatTS(c.Start)))
+		}
 
 		var words strings.Builder
 		for wi := start; wi < end; wi++ {
@@ -380,10 +392,18 @@ func (m Model) renderTranscript() string {
 			words.WriteString(text)
 		}
 
-		b.WriteString(marker + ts + words.String())
+		line := marker + ts + words.String()
+		if m.viewport.Width > 0 {
+			line = lipgloss.NewStyle().Width(m.viewport.Width).Render(line)
+		}
+
+		cueVisualLine[i] = visual
+		visual += strings.Count(line, "\n") + 1
+
+		b.WriteString(line)
 		b.WriteString("\n")
 	}
-	return b.String()
+	return b.String(), cueVisualLine
 }
 
 func formatTS(d time.Duration) string {

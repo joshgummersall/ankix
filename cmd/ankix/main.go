@@ -17,6 +17,7 @@ func main() {
 	root.AddCommand(newInstallCmd())
 	root.AddCommand(newKindleCmd())
 	root.AddCommand(newYouTubeCmd())
+	root.AddCommand(newWebCmd())
 	root.AddCommand(newVersionCmd())
 
 	if err := root.Execute(); err != nil {

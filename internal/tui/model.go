@@ -30,11 +30,12 @@ const (
 
 // Config holds everything the TUI needs to run.
 type Config struct {
-	Transcript *subtitle.Transcript
-	VideoTitle string
-	Deck       string
-	AnkiClient *anki.Client
-	Translator translate.Provider // nil if glossing is disabled
+	Transcript     *subtitle.Transcript
+	VideoTitle     string
+	Deck           string
+	AnkiClient     *anki.Client
+	Translator     translate.Provider // nil if glossing is disabled
+	ShowTimestamps bool               // false for sources with no time axis (e.g. web articles)
 }
 
 // Model is the root Bubble Tea model.
@@ -47,8 +48,9 @@ type Model struct {
 	height   int
 	ready    bool
 
-	words        []subtitle.Word // every word in the transcript, in order, tagged with its source line
-	cueFirstWord []int           // cueFirstWord[i] = index into words of cue i's first word
+	words         []subtitle.Word // every word in the transcript, in order, tagged with its source line
+	cueFirstWord  []int           // cueFirstWord[i] = index into words of cue i's first word
+	cueVisualLine []int           // cueVisualLine[i] = wrapped viewport line cue i starts on, set by syncViewport
 
 	cursorWord int
 	pendingG   bool
@@ -186,7 +188,7 @@ func (m Model) View() string {
 		return "loading..."
 	}
 
-	header := titleStyle.Render(fmt.Sprintf("ankix :: %s", m.cfg.VideoTitle)) +
+	header := titleStyle.Render(m.cfg.VideoTitle) +
 		"  " + helpStyle.Render(fmt.Sprintf("%d lines loaded", len(m.cfg.Transcript.Cues)))
 	if m.searching {
 		header = m.searchInput.View()

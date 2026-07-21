@@ -53,6 +53,39 @@ func BuildWordNote(deck, videoTitle, videoID string, cueStart time.Duration, sen
 	}
 }
 
+// BuildWebWordNote is BuildWordNote's counterpart for the web source: no
+// timestamp or video deep link, just a plain link to the source page.
+func BuildWebWordNote(deck, title, url, sentence string, sel WordSelection) Note {
+	word := sentence[sel.Start:sel.End]
+
+	front := "<h1>" + word + "</h1>" +
+		sentence[:sel.Start] + "<b><i>" + word + "</i></b>" + sentence[sel.End:]
+
+	var back strings.Builder
+	if sel.Gloss != "" {
+		back.WriteString(sel.Gloss)
+		back.WriteString("<br><br>")
+	}
+	back.WriteString(title)
+	if url != "" {
+		fmt.Fprintf(&back, ` — <a href="%s">read</a>`, url)
+	}
+
+	return Note{
+		DeckName:  deck,
+		ModelName: "Basic",
+		Fields: map[string]string{
+			"Front": front,
+			"Back":  back.String(),
+		},
+		Tags: []string{SourceTag("Web"), WordTag(word)},
+		Options: &NoteOptions{
+			AllowDuplicate: false,
+			DuplicateScope: "deck",
+		},
+	}
+}
+
 func formatTimestamp(d time.Duration) string {
 	d = d.Round(time.Second)
 	m := d / time.Minute

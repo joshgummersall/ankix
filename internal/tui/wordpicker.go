@@ -96,7 +96,13 @@ func (m Model) submitWordPick() (tea.Model, tea.Cmd) {
 		start := m.ps.tokens[m.ps.wordTokens[p.lo]].start
 		end := m.ps.tokens[m.ps.wordTokens[p.hi]].end
 		sel := anki.WordSelection{Start: start, End: end, Gloss: p.preview}
-		notes = append(notes, anki.BuildWordNote(m.cfg.Deck, m.cfg.VideoTitle, m.cfg.Transcript.VideoID, m.cueStart, m.sentence, sel))
+		var note anki.Note
+		if m.cfg.ShowTimestamps {
+			note = anki.BuildWordNote(m.cfg.Deck, m.cfg.VideoTitle, m.cfg.Transcript.VideoID, m.cueStart, m.sentence, sel)
+		} else {
+			note = anki.BuildWebWordNote(m.cfg.Deck, m.cfg.VideoTitle, m.cfg.Transcript.VideoID, m.sentence, sel)
+		}
+		notes = append(notes, note)
 	}
 	if len(notes) == 0 {
 		m.setStatus("mark at least one word with v first", true)
@@ -149,8 +155,13 @@ func (m Model) renderWordPicker() string {
 	}
 	b.WriteString("\n\n")
 	b.WriteString(helpStyle.Render(fmt.Sprintf("%d %s will be added, deck: %s", cards, word, m.cfg.Deck)))
-	if link := anki.VideoLink(m.cfg.Transcript.VideoID, m.cueStart); link != "" {
-		b.WriteString("\n" + helpStyle.Render("link: "+link))
+	switch {
+	case m.cfg.ShowTimestamps:
+		if link := anki.VideoLink(m.cfg.Transcript.VideoID, m.cueStart); link != "" {
+			b.WriteString("\n" + helpStyle.Render("link: "+link))
+		}
+	case m.cfg.Transcript.VideoID != "":
+		b.WriteString("\n" + helpStyle.Render("link: "+m.cfg.Transcript.VideoID))
 	}
 	b.WriteString("\n")
 

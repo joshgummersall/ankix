@@ -11,7 +11,7 @@ import (
 
 func TestRenderWordPicker_ShowsVideoLinkForRealYouTubeID(t *testing.T) {
 	cues := []subtitle.Cue{{Text: "la casa vieja"}}
-	m := New(Config{Transcript: &subtitle.Transcript{VideoID: "dQw4w9WgXcQ", Cues: cues}})
+	m := New(Config{Transcript: &subtitle.Transcript{VideoID: "dQw4w9WgXcQ", Cues: cues}, ShowTimestamps: true})
 	mi, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
 	m = mi.(Model)
 
@@ -31,7 +31,7 @@ func TestRenderWordPicker_ShowsVideoLinkForRealYouTubeID(t *testing.T) {
 func TestRenderWordPicker_NoLinkForReviewLoadedTranscript(t *testing.T) {
 	cues := []subtitle.Cue{{Text: "la casa vieja"}}
 	// runReview passes the file path as VideoID, not a real YouTube ID.
-	m := New(Config{Transcript: &subtitle.Transcript{VideoID: "/tmp/sample.es.vtt", Cues: cues}})
+	m := New(Config{Transcript: &subtitle.Transcript{VideoID: "/tmp/sample.es.vtt", Cues: cues}, ShowTimestamps: true})
 	mi, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
 	m = mi.(Model)
 

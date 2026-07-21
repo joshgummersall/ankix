@@ -78,11 +78,12 @@ func launchYouTubeTUI(f *youtubeFlags, transcript *subtitle.Transcript, title st
 	}
 
 	m := tui.New(tui.Config{
-		Transcript: transcript,
-		VideoTitle: title,
-		Deck:       f.deck,
-		AnkiClient: client,
-		Translator: translator,
+		Transcript:     transcript,
+		VideoTitle:     title,
+		Deck:           f.deck,
+		AnkiClient:     client,
+		Translator:     translator,
+		ShowTimestamps: true,
 	})
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
