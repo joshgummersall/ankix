@@ -100,4 +100,3 @@ func TestBuildWordNote_VideoLinkClampsToZero(t *testing.T) {
 		t.Errorf("Back = %q, want it to contain t=0 (clamped, not negative)", n.Fields["Back"])
 	}
 }
-
