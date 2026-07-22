@@ -45,7 +45,7 @@ func BuildYouTubeNote(deck, videoTitle, videoID string, cueStart time.Duration, 
 			"Front": front,
 			"Back":  back.String(),
 		},
-		Tags: []string{SourceTag("YouTube"), "AnkiX::Video::" + videoID, WordTag(word)},
+		Tags: []string{SourceTag("YouTube"), "AnkiX::Video::" + videoID},
 		Options: &NoteOptions{
 			AllowDuplicate: false,
 			DuplicateScope: "deck",
@@ -79,7 +79,7 @@ func BuildNote(deck, title, url, sourceTag, sentence string, sel WordSelection) 
 			"Front": front,
 			"Back":  back.String(),
 		},
-		Tags: []string{SourceTag(sourceTag), WordTag(word)},
+		Tags: []string{SourceTag(sourceTag)},
 		Options: &NoteOptions{
 			AllowDuplicate: false,
 			DuplicateScope: "deck",

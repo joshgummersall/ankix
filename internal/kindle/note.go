@@ -39,8 +39,6 @@ func BuildNote(deck string, tags []string, e Entry, sentence string, start, end 
 		front += sentence
 	}
 
-	allTags := append(append([]string{}, tags...), anki.WordTag(phrase))
-
 	return anki.Note{
 		DeckName:  deck,
 		ModelName: ankiModelName,
@@ -48,7 +46,7 @@ func BuildNote(deck string, tags []string, e Entry, sentence string, start, end 
 			"Front": front,
 			"Back":  definition,
 		},
-		Tags: allTags,
+		Tags: tags,
 		Options: &anki.NoteOptions{
 			AllowDuplicate: false,
 			DuplicateScope: "deck",

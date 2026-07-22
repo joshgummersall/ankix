@@ -63,9 +63,9 @@ watermark is kept. This opens `vocab.db` read-write (except for a headless
 the change to take effect on the device. Before writing anything, `vocab.db`
 is copied to `vocab.db.bak` alongside it.
 
-Each new note is tagged `AnkiX::Word::<word>`; re-running `sync` checks
-AnkiConnect for that tag in the target deck to skip words already synced,
-so it's safe to re-run.
+Re-running `sync` checks AnkiConnect for an existing note with a matching
+headword in the target deck to skip words already synced, so it's safe to
+re-run.
 
 Definitions are hydrated through the `dict.Provider` interface
 (`internal/dict/dict.go`), so other sources can be added later without
