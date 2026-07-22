@@ -33,6 +33,7 @@ homebrew_casks:
     binaries:
       - ankix
     dependencies:
+      - formula: ollama
       - formula: yt-dlp
     hooks:
       post:
