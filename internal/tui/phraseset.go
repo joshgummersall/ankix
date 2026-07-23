@@ -261,6 +261,46 @@ func (ps *phraseSet[T]) moveCursorLeft() {
 	ps.wordCursor = next
 }
 
+// moveCursorPrevPhrase jumps the cursor to the start of the nearest
+// standalone phrase entirely before it, or to the beginning of the sentence
+// if there isn't one.
+func (ps *phraseSet[T]) moveCursorPrevPhrase() {
+	best, bestHi := -1, -1
+	for i, p := range ps.phrases {
+		if p.mergedInto != -1 || p.deleted || p.hi >= ps.wordCursor {
+			continue
+		}
+		if p.hi > bestHi {
+			best, bestHi = i, p.hi
+		}
+	}
+	if best == -1 {
+		ps.wordCursor = 0
+		return
+	}
+	ps.wordCursor = ps.phrases[best].lo
+}
+
+// moveCursorNextPhrase jumps the cursor to the end of the nearest standalone
+// phrase entirely after it, or to the end of the sentence if there isn't
+// one.
+func (ps *phraseSet[T]) moveCursorNextPhrase() {
+	best, bestLo := -1, -1
+	for i, p := range ps.phrases {
+		if p.mergedInto != -1 || p.deleted || p.lo <= ps.wordCursor {
+			continue
+		}
+		if best == -1 || p.lo < bestLo {
+			best, bestLo = i, p.lo
+		}
+	}
+	if best == -1 {
+		ps.wordCursor = len(ps.wordTokens) - 1
+		return
+	}
+	ps.wordCursor = ps.phrases[best].hi
+}
+
 // moveExpandCursor moves the cursor by delta words and recomputes
 // phrases[expandIdx] as [min(anchor,cursor), max(anchor,cursor)] — vim
 // visual-mode style: anchor stays fixed at wherever expand mode began, and

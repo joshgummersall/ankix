@@ -234,7 +234,7 @@ func (m Model) helpText() string {
 	case stateVisual:
 		return "h/l/j/k extend selection  enter complete selection  esc cancel"
 	case stateWordPick:
-		return "h/l move  v expand/add word  d delete word  e edit sentence  enter add all  esc cancel"
+		return "h/l move  (/) jump to marked word  v expand/add word  d delete word  e edit sentence  enter add all  esc cancel"
 	case stateWordExpand:
 		return "h/l extend selection  enter confirm  esc cancel"
 	case stateEditSentence:

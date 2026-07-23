@@ -56,6 +56,12 @@ func (m Model) handleWordPickKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "h", "left":
 		m.ps.moveCursorLeft()
 		return m, nil
+	case "(":
+		m.ps.moveCursorPrevPhrase()
+		return m, nil
+	case ")":
+		m.ps.moveCursorNextPhrase()
+		return m, nil
 	case "e":
 		return m, m.enterEditSentence()
 	case "v":

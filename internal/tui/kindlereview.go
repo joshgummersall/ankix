@@ -365,11 +365,6 @@ func (m KindleModel) submitGroup() (tea.Model, tea.Cmd) {
 		sels = append(sels, kindleSelection{entries: entries, start: start, end: end, definition: p.preview})
 	}
 
-	if len(sels) == 0 {
-		m.skipped += len(skipped)
-		return m, m.loadGroup(m.groupIdx + 1)
-	}
-
 	m.state = kSubmitting
 	m.setStatus("adding...", false)
 	return m, kindleBatchSubmitCmd(m.cfg, m.sentence, sels, skipped)
@@ -527,11 +522,21 @@ type kindleBatchSubmitResultMsg struct {
 
 // kindleBatchSubmitCmd adds one note per selection to Anki (skipping any
 // whose phrase already has a note in the deck), marking each word Mastered
-// in vocab.db as it's added or found to already exist.
+// in vocab.db as it's added, found to already exist, or explicitly deleted
+// from review (skipped) — every word the user has reviewed is done with,
+// regardless of whether it became a card.
 func kindleBatchSubmitCmd(cfg KindleConfig, sentence string, sels []kindleSelection, skipped []kindle.Entry) tea.Cmd {
 	return func() tea.Msg {
-		if err := cfg.AnkiClient.CreateDeck(cfg.Deck); err != nil {
-			return kindleBatchSubmitResultMsg{err: err}
+		if len(sels) > 0 {
+			if err := cfg.AnkiClient.CreateDeck(cfg.Deck); err != nil {
+				return kindleBatchSubmitResultMsg{err: err}
+			}
+		}
+
+		for _, e := range skipped {
+			if err := markMastered(cfg, e); err != nil {
+				return kindleBatchSubmitResultMsg{skipped: len(skipped), err: err}
+			}
 		}
 
 		var added, duplicates int

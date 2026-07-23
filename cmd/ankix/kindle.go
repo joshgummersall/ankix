@@ -124,6 +124,11 @@ func runSync(o *syncOptions) error {
 		if definition == "" {
 			skippedNoDefinition++
 			fmt.Printf("skip %q: no definition found\n", e.Word)
+			if !o.dryRun {
+				if err := kindle.MarkMastered(db, e.ID); err != nil {
+					return err
+				}
+			}
 			continue
 		}
 
