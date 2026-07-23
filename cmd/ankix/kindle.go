@@ -53,6 +53,8 @@ func newKindleVocabCmd(cfg config) *cobra.Command {
 	cmd.Flags().IntVar(&o.limit, "limit", 0, "limit to the N most recently looked-up words (0 for no limit)")
 	cmd.Flags().BoolVar(&o.headless, "headless", false, "sync every word straight through without the interactive review TUI (e.g. for cron/automation)")
 
+	cmd.AddCommand(newKindleVocabDbCmd())
+
 	return cmd
 }
 

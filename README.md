@@ -61,7 +61,19 @@ review queue — that's what tracks sync progress across runs, no separate
 watermark is kept. This opens `vocab.db` read-write (except for a headless
 `--dry-run`), so point it at the device itself rather than a copy if you want
 the change to take effect on the device. Before writing anything, `vocab.db`
-is copied to `vocab.db.bak` alongside it.
+is snapshotted into a timestamped backup log under
+`$XDG_CONFIG_HOME/ankix/kindle-backups` (or the OS equivalent), namespaced
+per source file. Use `ankix kindle vocab db list <vocab.db>` to see past
+snapshots and `ankix kindle vocab db restore <vocab.db> <index>` to roll
+back to one (which itself snapshots the current file first, so a restore is
+always undoable).
+
+The namespace is keyed by the `vocab.db` **path** you pass in, not the
+device itself — `vocab.db` has no serial number or account ID to key off.
+If the same Kindle ever mounts at a different path, or you copy `vocab.db`
+somewhere new, `list`/`restore` will see it as an unrelated file and start a
+fresh backup history rather than continuing the old one. Always point
+`list`/`restore` at the same path you've been syncing that device with.
 
 Re-running `sync` checks AnkiConnect for an existing note with a matching
 headword in the target deck to skip words already synced, so it's safe to
