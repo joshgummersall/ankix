@@ -21,7 +21,8 @@ brew install --cask joshgummersall/ankix/ankix
 
 - [Ollama](https://ollama.com/) — the `kindle`, `youtube`, and `web` commands
   all use the same `ankix` model (`ollama/vocab/Modelfile`)
-- [Anki](https://apps.ankiweb.net/) running with [AnkiConnect](https://ankiweb.net/shared/info/2055492159) installed
+- [Anki](https://apps.ankiweb.net/) running with the [AnkiConnect](https://ankiweb.net/shared/info/2055492159)
+  add-on installed (Tools → Add-ons → Get Add-ons..., code `2055492159`, then restart Anki)
 - `yt-dlp` for the `youtube` command
 
 After installing, build the local Ollama model once:

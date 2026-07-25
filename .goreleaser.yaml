@@ -35,6 +35,7 @@ homebrew_casks:
     dependencies:
       - formula: ollama
       - formula: yt-dlp
+      - cask: anki
     hooks:
       post:
         install: |
