@@ -24,7 +24,9 @@ Where:
 - TRANSLATION is the English translation of the given word as it functions
   in THIS sentence, matching its tense/number/form as used — 1-4 words.
 - LEMMA is the English meaning of the word's dictionary/base form — for
-  verbs, use "to ___"; for nouns/adjectives, use the singular base form.
+  verbs, ALWAYS use the "to ___" infinitive form (e.g. "to cause", never
+  bare "cause"); for nouns/adjectives, use the singular base form with no
+  "to".
 
 Rules:
 1. Output ONLY that one line. No restating the sentence. No alternate
@@ -43,6 +45,14 @@ Rules:
    their most obvious English cognate or literal reading. Check whether the
    sentence's topic (sports, anatomy, geography, etc.) points to that other
    sense before answering with the literal one.
+6. A concrete noun can be used figuratively (e.g. "una catarata de
+   fanatismo" = "a torrent of fanaticism", not a literal waterfall). Match
+   the figurative sense when the sentence isn't describing the literal
+   object.
+7. Verbs of motion/position are easy to mix up: "parar(se)" in
+   Latin American usage often means "to stand" (not "to stop"); "rodar"
+   means "to roll" (not "to kick"); don't default to the nearest English
+   cognate.
 """
 
 MESSAGE user Word: banco | Sentence: Nos sentamos en el banco del parque mientras esperábamos el autobús.
@@ -89,3 +99,51 @@ MESSAGE assistant TRANSLATION: divided | LEMMA: to divide
 
 MESSAGE user Word: relieve | Sentence: Pero la diferencia es que esas islas son volcánicas, se originaron por volcanes y por eso son islas que tienen mucho relieve, que tienen muchas montañas, mientras que en el caso de Barbados es diferente porque es una isla hecha de coral.
 MESSAGE assistant TRANSLATION: relief | LEMMA: relief (terrain)
+
+MESSAGE user Word: vago | Sentence: Soy un poco vago, prefiero quedarme en casa jugando videojuegos que salir a hacer ejercicio.
+MESSAGE assistant TRANSLATION: lazy | LEMMA: lazy
+
+MESSAGE user Word: se retorciera | Sentence: Sentía como si algo se retorciera bajo su piel, un dolor que no la dejaba en paz.
+MESSAGE assistant TRANSLATION: writhed | LEMMA: to writhe
+
+MESSAGE user Word: gregaria | Sentence: Vivía en una sociedad cada vez más brutal y gregaria, donde nadie se atrevía a pensar distinto.
+MESSAGE assistant TRANSLATION: gregarious | LEMMA: herd-like
+
+MESSAGE user Word: actualidad | Sentence: La actualidad de los grandes autores clásicos es permanente, siguen siendo relevantes siglo tras siglo.
+MESSAGE assistant TRANSLATION: relevance | LEMMA: relevant
+
+MESSAGE user Word: se paraba | Sentence: Mi papá se paraba al costado de la cancha con los brazos cruzados, como hace siempre.
+MESSAGE assistant TRANSLATION: would stand | LEMMA: to stand
+
+MESSAGE user Word: abordarme | Sentence: Cuando alguien intentó abordarme, me desvié hacia la derecha y le hice un dribleo.
+MESSAGE assistant TRANSLATION: tackle me | LEMMA: to tackle
+
+MESSAGE user Word: me doblaba en estatura | Sentence: Me doblaba en estatura, tenía bigotes y aparentaba unos dieciocho.
+MESSAGE assistant TRANSLATION: was twice my height | LEMMA: to double
+
+MESSAGE user Word: caño por detrás | Sentence: ¡Acababa de hacerle un caño por detrás!
+MESSAGE assistant TRANSLATION: nutmeg from behind | LEMMA: nutmeg
+
+MESSAGE user Word: superaba rápidamente | Sentence: Si no lo superaba rápidamente, los otros defensas me atraparían.
+MESSAGE assistant TRANSLATION: got past quickly | LEMMA: to get past
+
+MESSAGE user Word: me echó encima | Sentence: Se me echó encima, intentando intimidarme.
+MESSAGE assistant TRANSLATION: came at me | LEMMA: to come at
+
+MESSAGE user Word: tierna | Sentence: Es muy linda, es muy tierna y ahora tiene un nuevo corte de pelo.
+MESSAGE assistant TRANSLATION: sweet/cute | LEMMA: sweet/cute
+
+MESSAGE user Word: rodar la pelota | Sentence: Hice rodar la pelota hacia atrás con la parte superior del pie y giré a su alrededor.
+MESSAGE assistant TRANSLATION: roll the ball | LEMMA: to roll
+
+MESSAGE user Word: piernas de alcornoque | Sentence: La pelota pasó justo a través de sus piernas de alcornoque mientras yo giraba a su alrededor.
+MESSAGE assistant TRANSLATION: wooden legs | LEMMA: cork-oak legs
+
+MESSAGE user Word: la losa | Sentence: Antes de ir a la casa de mi abuela, vamos a lavar la losa de mi cocina.
+MESSAGE assistant TRANSLATION: the dishes | LEMMA: dishes
+
+MESSAGE user Word: cono de protección | Sentence: El perro necesita usar el cono de protección para no rascarse la herida.
+MESSAGE assistant TRANSLATION: protective cone | LEMMA: protective cone
+
+MESSAGE user Word: picadillo | Sentence: El chile poblano venía relleno de picadillo, una mezcla de carne molida, frutas y especias.
+MESSAGE assistant TRANSLATION: minced meat filling | LEMMA: picadillo

@@ -254,3 +254,168 @@ tests:
     assert:
       - type: icontains
         value: "TRANSLATION: relief"
+  - description: "vago here means lazy, not laid-back"
+    vars:
+      word: vago
+      sentence: "Me encantan el fútbol y los videojuegos, soy un poco vago y tengo un lagarto de mascota que se llama Messi y con el que hablo como si fuera una persona de verdad."
+    assert:
+      - type: icontains
+        value: "TRANSLATION: lazy"
+      - type: icontains
+        value: "LEMMA: lazy"
+
+  - description: "means it writhes/squirms, not 'twisted'"
+    vars:
+      word: se retorciera
+      sentence: "Tengo una historia que contar que siento como si se retorciera bajo mi piel, deseando salir, y mis amigos están a miles de kilómetros de distancia, en otro país."
+    assert:
+      - type: icontains
+        value: "TRANSLATION: writhed"
+      - type: icontains
+        value: "LEMMA: to writhe"
+
+  - description: "gregaria means herd-like/conformist, not 'tribal'"
+    vars:
+      word: gregaria
+      sentence: "Pero Stefan Zweig, en la hora más trágica que ha vivido Europa, fijó su atención en un elemento que resulta fundamental en el autor de Los ensayos: el esfuerzo por salvar su independencia en una sociedad cada vez más brutal y gregaria."
+    assert:
+      - type: icontains
+        value: "TRANSLATION: gregarious"
+      - type: icontains
+        value: "LEMMA: herd-like"
+
+  - description: "means ongoing relevance here, not 'current affairs'"
+    vars:
+      word: actualidad
+      sentence: "de Simplicissimus Book Farm Indice PREFACIO ​I II III IV ​V ​VI ​VII VIII IX PREFACIO Sin duda, la actualidad de los grandes autores, como Montaigne, es permanente y múltiple."
+    assert:
+      - type: icontains
+        value: "TRANSLATION: relevance"
+      - type: icontains
+        value: "LEMMA: relevant"
+
+  - description: "figurative 'catarata de fanatismo' = torrent/flood, literal 'waterfall' misleading"
+    vars:
+      word: catarata
+      sentence: "Seguramente, hay otros muchos Montaigne dignos de interés: el impenitente pintor de su propio carácter, el filósofo naturalista, el pensador conversacional, el autor irónico… Sin embargo, a Zweig, en Brasil, en los últimos meses de su vida, se le revela imprescindible éste: el hombre que pugna por seguir siendo él mismo, simplemente él mismo, en medio de una catarata de fanatismo y destrucción."
+    assert:
+      - type: icontains
+        value: "TRANSLATION: torrent"
+      - type: icontains
+        value: "LEMMA: waterfall, used figuratively"
+
+  - description: "imperfect of pararse (to stand), not 'to stop'"
+    vars:
+      word: se paraba
+      sentence: "Pero mi papá se paraba al costado de la cancha con los brazos cruzados, como hace siempre."
+    assert:
+      - type: icontains
+        value: "TRANSLATION: would stand"
+      - type: icontains
+        value: "LEMMA: to stand"
+
+  - description: "soccer context: abordar means to tackle/close in on"
+    vars:
+      word: abordarme
+      sentence: "Cuando alguien intentó abordarme, me desvié hacia la derecha y le hice un dribleo."
+    assert:
+      - type: icontains
+        value: "TRANSLATION: tackle me"
+      - type: icontains
+        value: "LEMMA: to tackle"
+
+  - description: "idiom means twice someone's height, not 'to bend'"
+    vars:
+      word: Me doblaba en estatura
+      sentence: "Me doblaba en estatura, tenía bigotes y aparentaba unos dieciocho."
+    assert:
+      - type: icontains
+        value: "TRANSLATION: was twice my height"
+      - type: icontains
+        value: "LEMMA: to double"
+
+  - description: "'caño' is soccer slang for nutmeg, not a shot"
+    vars:
+      word: caño por detrás
+      sentence: "¡Acababa de hacerle un caño por detrás!"
+    assert:
+      - type: icontains
+        value: "TRANSLATION: nutmeg from behind"
+      - type: icontains
+        value: "LEMMA: nutmeg"
+
+  - description: "'rodar' means to roll, not to kick"
+    vars:
+      word: rodar la pelota
+      sentence: "En cuanto estuvo lo bastante cerca, hice rodar la pelota hacia atrás con la parte superior del pie, justo a través de sus piernas de alcornoque, y giré a su alrededor."
+    assert:
+      - type: icontains
+        value: "TRANSLATION: roll the ball"
+      - type: icontains
+        value: "LEMMA: to roll"
+
+  - description: "'piernas' means legs, not knees"
+    vars:
+      word: piernas de alcornoque
+      sentence: "En cuanto estuvo lo bastante cerca, hice rodar la pelota hacia atrás con la parte superior del pie, justo a través de sus piernas de alcornoque, y giré a su alrededor."
+    assert:
+      - type: icontains
+        value: "TRANSLATION: wooden legs"
+      - type: icontains
+        value: "LEMMA: cork-oak legs"
+
+  - description: "specifically a seasoned ground/minced meat mixture"
+    vars:
+      word: picadillo
+      sentence: "hecho de un chile poblano completo relleno de picadillo que es una mezcla de carne molida frutas y especies"
+    assert:
+      - type: icontains
+        value: "TRANSLATION: minced meat filling"
+      - type: icontains
+        value: "LEMMA: picadillo"
+
+  - description: "reflexive idiom means 'attacked/confronted me'"
+    vars:
+      word: me echó encima
+      sentence: "Se me echó encima, intentando intimidarme."
+    assert:
+      - type: icontains
+        value: "TRANSLATION: came at me"
+      - type: icontains
+        value: "LEMMA: to come at"
+
+  - description: "soccer context: superar means to get past/beat a defender"
+    vars:
+      word: superaba rápidamente
+      sentence: "Si no lo superaba rápidamente, los otros defensas me atraparían, así que en una fracción de segundo decidí intentar un nuevo movimiento."
+    assert:
+      - type: icontains
+        value: "TRANSLATION: got past quickly"
+      - type: icontains
+        value: "LEMMA: to get past"
+
+  - description: "'lavar la losa' means washing dishes/kitchenware in this Colombian usage"
+    vars:
+      word: la losa
+      sentence: "Y bueno, ahora sí, antes de ir a la casa de mi abuela, vamos a lavar la losa de mi cocina."
+    assert:
+      - type: icontains
+        value: "TRANSLATION: the dishes"
+      - type: icontains
+        value: "LEMMA: dishes"
+
+  - description: "refers to an Elizabethan collar/cone dogs wear, not a bandage"
+    vars:
+      word: cono de protección
+      sentence: "Él tiene un problema en su piel aquí y como tiene un problema, necesita usar el cono de protección para evitar que se rasque y se lastime la herida."
+    assert:
+      - type: icontains
+        value: "TRANSLATION: protective cone"
+
+  - description: "describing a pet's personality, means affectionate/cute"
+    vars:
+      word: tierna
+      sentence: "Es muy linda, es muy tierna y ahora tiene un nuevo corte de pelo."
+    assert:
+      - type: icontains
+        value: "TRANSLATION: sweet/cute"
