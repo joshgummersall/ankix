@@ -8,6 +8,7 @@ FROM llama3.2:3b
 
 PARAMETER temperature 0
 PARAMETER num_predict 24
+PARAMETER num_ctx 4096
 PARAMETER stop "\n"
 PARAMETER stop "Word:"
 
@@ -53,6 +54,23 @@ Rules:
    Latin American usage often means "to stand" (not "to stop"); "rodar"
    means "to roll" (not "to kick"); don't default to the nearest English
    cognate.
+8. Rule 4 also applies the other way: if the given word is an adjective,
+   translate only the adjective, not the noun it modifies (e.g. "acero
+   quirúrgico" → the word "quirúrgico" alone is "surgical", not "surgical
+   steel").
+9. If the given word/phrase contains more than one verb (e.g. "frena y
+   avanza"), LEMMA must give the infinitive of ALL the verbs, joined the
+   same way the phrase joins them (e.g. "to brake and accelerate"), never
+   just the first verb alone.
+10. Match the grammatical person and polarity of the given phrase exactly.
+    "No me acuerdo" is first-person singular negative ("I don't
+    remember") — do not shift it to third person ("doesn't remember") or
+    flip its sense (acordarse = "to remember", not "to forget").
+11. "Acordarse (de)" and "recordar" both mean "to remember" — they are NOT
+    "to forget" (that's "olvidar(se)") and NOT "to agree" (that's
+    "acordar" in the sense of reaching an agreement, a much rarer sense).
+    Default to "to remember" whenever "acordarse" appears with a reflexive
+    pronoun (me/te/se acuerdo/acuerdas/acuerda...).
 """
 
 MESSAGE user Word: banco | Sentence: Nos sentamos en el banco del parque mientras esperábamos el autobús.
@@ -147,3 +165,18 @@ MESSAGE assistant TRANSLATION: protective cone | LEMMA: protective cone
 
 MESSAGE user Word: picadillo | Sentence: El chile poblano venía relleno de picadillo, una mezcla de carne molida, frutas y especias.
 MESSAGE assistant TRANSLATION: minced meat filling | LEMMA: picadillo
+
+MESSAGE user Word: quirúrgico | Sentence: Tienen que ser de oro, o de plata, o de acero quirúrgico, y no puedo usar otra cosa.
+MESSAGE assistant TRANSLATION: surgical | LEMMA: surgical
+
+MESSAGE user Word: muy bruscamente | Sentence: Hay una persona que maneja que frena y avanza como muy bruscamente, de forma muy brusca, me mareo.
+MESSAGE assistant TRANSLATION: very abruptly | LEMMA: abruptly
+
+MESSAGE user Word: que frena y avanza | Sentence: Hay una persona que maneja que frena y avanza como muy bruscamente, y me mareo.
+MESSAGE assistant TRANSLATION: that brakes and accelerates | LEMMA: to brake and accelerate
+
+MESSAGE user Word: me acuerdo | Sentence: Todavía me acuerdo de la primera vez que fui a la playa con mi abuela.
+MESSAGE assistant TRANSLATION: I remember | LEMMA: to remember
+
+MESSAGE user Word: No me acuerdo | Sentence: No me acuerdo, pero a mí me da un pánico terrible.
+MESSAGE assistant TRANSLATION: I don't remember | LEMMA: to remember

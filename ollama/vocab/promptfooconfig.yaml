@@ -419,3 +419,43 @@ tests:
     assert:
       - type: icontains
         value: "TRANSLATION: sweet/cute"
+
+  - description: "quirúrgico here is just 'surgical' — don't pull in the noun it modifies (acero quirúrgico)"
+    vars:
+      word: quirúrgico
+      sentence: "Sí, pero tienen que ser de oro, o de plata, o de acero quirúrgico, y no puedo usar..."
+    assert:
+      - type: icontains
+        value: "TRANSLATION: surgical"
+      - type: not-icontains
+        value: "steel"
+
+  - description: "bruscamente means abruptly/roughly, not 'suddenly' (that's de repente/de pronto)"
+    vars:
+      word: muy bruscamente
+      sentence: "Tipo, si es un camino como más montañoso o hay una persona que maneja que frena y avanza como muy bruscamente, de forma muy brusca, me mareo."
+    assert:
+      - type: icontains
+        value: "abrupt"
+      - type: not-icontains
+        value: "suddenly"
+
+  - description: "LEMMA for a multi-verb phrase should be the infinitive form of both verbs, not a fragment of the translation"
+    vars:
+      word: que frena y avanza
+      sentence: "Tipo, si es un camino como más montañoso o hay una persona que maneja que frena y avanza como muy bruscamente, de forma muy brusca, me mareo."
+    assert:
+      - type: icontains
+        value: "brakes and accelerates"
+      - type: icontains
+        value: "LEMMA: to brake and accelerate"
+
+  - description: "acordarse means 'to remember' (not 'to forget'); no me acuerdo is first person 'I don't remember', not third person"
+    vars:
+      word: No me acuerdo
+      sentence: "No me acuerdo, pero a mí me da un pánico terrible."
+    assert:
+      - type: icontains
+        value: "TRANSLATION: I don't remember"
+      - type: icontains
+        value: "LEMMA: to remember"
