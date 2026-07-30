@@ -87,6 +87,53 @@ func BuildNote(deck, title, url, sourceTag, sentence string, sel WordSelection) 
 	}
 }
 
+// BuildPodcastNote is BuildYouTubeNote's counterpart for a podcast episode:
+// Back links to the episode audio at roughly cueStart instead of a video.
+func BuildPodcastNote(deck, episodeTitle, audioURL string, cueStart time.Duration, sentence string, sel WordSelection) Note {
+	word := sentence[sel.Start:sel.End]
+
+	front := "<h1>" + word + "</h1>" +
+		sentence[:sel.Start] + "<b><i>" + word + "</i></b>" + sentence[sel.End:]
+
+	var back strings.Builder
+	if sel.Gloss != "" {
+		back.WriteString(sel.Gloss)
+		back.WriteString("<br><br>")
+	}
+	fmt.Fprintf(&back, "%s (%s)", episodeTitle, formatTimestamp(cueStart))
+	if link := AudioLink(audioURL, cueStart); link != "" {
+		fmt.Fprintf(&back, ` — <a href="%s">listen</a>`, link)
+	}
+
+	return Note{
+		DeckName:  deck,
+		ModelName: "Basic",
+		Fields: map[string]string{
+			"Front": front,
+			"Back":  back.String(),
+		},
+		Tags: []string{SourceTag("Podcast")},
+		Options: &NoteOptions{
+			AllowDuplicate: false,
+			DuplicateScope: "deck",
+		},
+	}
+}
+
+// AudioLink returns a link to audioURL with a #t=seconds fragment that jumps
+// to roughly cueStart in players (e.g. HTML5 <audio>) that support it, or ""
+// if audioURL is empty.
+func AudioLink(audioURL string, cueStart time.Duration) string {
+	if audioURL == "" {
+		return ""
+	}
+	seconds := int(cueStart.Round(time.Second).Seconds()) - 1
+	if seconds < 0 {
+		seconds = 0
+	}
+	return fmt.Sprintf("%s#t=%d", audioURL, seconds)
+}
+
 func formatTimestamp(d time.Duration) string {
 	d = d.Round(time.Second)
 	m := d / time.Minute

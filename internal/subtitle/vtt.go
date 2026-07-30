@@ -2,6 +2,7 @@ package subtitle
 
 import (
 	"bufio"
+	"io"
 	"os"
 	"regexp"
 	"strings"
@@ -24,7 +25,14 @@ func ParseVTT(path, videoID string) (*Transcript, error) {
 	}
 	defer f.Close()
 
-	raw, err := parseCues(f)
+	return ParseVTTReader(f, videoID)
+}
+
+// ParseVTTReader is ParseVTT for an already-open WEBVTT stream, letting
+// callers that fetch a transcript over HTTP (e.g. the podcast package) parse
+// it without writing a temp file first.
+func ParseVTTReader(r io.Reader, videoID string) (*Transcript, error) {
+	raw, err := parseCues(r)
 	if err != nil {
 		return nil, err
 	}
@@ -32,9 +40,9 @@ func ParseVTT(path, videoID string) (*Transcript, error) {
 	return &Transcript{VideoID: videoID, Cues: dedupeCues(raw)}, nil
 }
 
-func parseCues(f *os.File) ([]Cue, error) {
+func parseCues(r io.Reader) ([]Cue, error) {
 	var cues []Cue
-	scanner := bufio.NewScanner(f)
+	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
 	for scanner.Scan() {
