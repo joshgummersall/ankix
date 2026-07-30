@@ -17,13 +17,13 @@ func TestBuildWordNote_BoldsWordInSentence(t *testing.T) {
 			name:         "word at start",
 			sentence:     "casa grande",
 			sel:          WordSelection{Start: 0, End: 4},
-			wantFrontSub: "<h1>casa</h1><b><i>casa</i></b> grande",
+			wantFrontSub: "<b>casa</b><br><br><i>casa</i> grande",
 		},
 		{
 			name:         "word at end",
 			sentence:     "casa grande",
 			sel:          WordSelection{Start: 5, End: 11},
-			wantFrontSub: "<h1>grande</h1>casa <b><i>grande</i></b>",
+			wantFrontSub: "<b>grande</b><br><br>casa <i>grande</i>",
 		},
 		{
 			name:     "punctuation adjacent word",
@@ -32,7 +32,7 @@ func TestBuildWordNote_BoldsWordInSentence(t *testing.T) {
 				Start: strings.Index("¿qué casa?", "casa"),
 				End:   strings.Index("¿qué casa?", "casa") + len("casa"),
 			},
-			wantFrontSub: "¿qué <b><i>casa</i></b>?",
+			wantFrontSub: "¿qué <i>casa</i>?",
 		},
 		{
 			name:     "repeated word only bolds the selected occurrence",
@@ -41,7 +41,7 @@ func TestBuildWordNote_BoldsWordInSentence(t *testing.T) {
 				Start: strings.LastIndex("la casa y la casa vieja", "casa"),
 				End:   strings.LastIndex("la casa y la casa vieja", "casa") + len("casa"),
 			},
-			wantFrontSub: "la casa y la <b><i>casa</i></b> vieja",
+			wantFrontSub: "la casa y la <i>casa</i> vieja",
 		},
 	}
 
@@ -66,10 +66,10 @@ func TestBuildWordNote_HeaderLetsSameSentenceYieldDistinctCards(t *testing.T) {
 	if n1.Fields["Front"] == n2.Fields["Front"] {
 		t.Errorf("expected different Front fields (different headwords) for different marked words, got identical: %q", n1.Fields["Front"])
 	}
-	if !strings.HasPrefix(n1.Fields["Front"], "<h1>casa</h1>") {
+	if !strings.HasPrefix(n1.Fields["Front"], "<b>casa</b>") {
 		t.Errorf("Front = %q, want it to start with the headword", n1.Fields["Front"])
 	}
-	if !strings.HasPrefix(n2.Fields["Front"], "<h1>vieja</h1>") {
+	if !strings.HasPrefix(n2.Fields["Front"], "<b>vieja</b>") {
 		t.Errorf("Front = %q, want it to start with the headword", n2.Fields["Front"])
 	}
 }

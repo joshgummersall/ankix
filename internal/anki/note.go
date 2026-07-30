@@ -16,8 +16,8 @@ type WordSelection struct {
 }
 
 // BuildYouTubeNote constructs a Basic (Front/Back) note for a single marked
-// word or phrase within sentence. Front is an <h1> headword followed by
-// the sentence with that word bolded/italicized — the headword is what
+// word or phrase within sentence. Front is a bolded headword followed by
+// the sentence with that word italicized — the headword is what
 // lets the same sentence generate several distinct cards (one per marked
 // word) without Anki's duplicate check (which compares the first field)
 // treating them as the same note. Back is the English gloss plus a link
@@ -25,8 +25,8 @@ type WordSelection struct {
 func BuildYouTubeNote(deck, videoTitle, videoID string, cueStart time.Duration, sentence string, sel WordSelection) Note {
 	word := sentence[sel.Start:sel.End]
 
-	front := "<h1>" + word + "</h1>" +
-		sentence[:sel.Start] + "<b><i>" + word + "</i></b>" + sentence[sel.End:]
+	front := "<b>" + word + "</b><br><br>" +
+		sentence[:sel.Start] + "<i>" + word + "</i>" + sentence[sel.End:]
 
 	var back strings.Builder
 	if sel.Gloss != "" {
@@ -59,8 +59,8 @@ func BuildYouTubeNote(deck, videoTitle, videoID string, cueStart time.Duration, 
 func BuildNote(deck, title, url, sourceTag, sentence string, sel WordSelection) Note {
 	word := sentence[sel.Start:sel.End]
 
-	front := "<h1>" + word + "</h1>" +
-		sentence[:sel.Start] + "<b><i>" + word + "</i></b>" + sentence[sel.End:]
+	front := "<b>" + word + "</b><br><br>" +
+		sentence[:sel.Start] + "<i>" + word + "</i>" + sentence[sel.End:]
 
 	var back strings.Builder
 	if sel.Gloss != "" {
@@ -92,8 +92,8 @@ func BuildNote(deck, title, url, sourceTag, sentence string, sel WordSelection) 
 func BuildPodcastNote(deck, episodeTitle, audioURL string, cueStart time.Duration, sentence string, sel WordSelection) Note {
 	word := sentence[sel.Start:sel.End]
 
-	front := "<h1>" + word + "</h1>" +
-		sentence[:sel.Start] + "<b><i>" + word + "</i></b>" + sentence[sel.End:]
+	front := "<b>" + word + "</b><br><br>" +
+		sentence[:sel.Start] + "<i>" + word + "</i>" + sentence[sel.End:]
 
 	var back strings.Builder
 	if sel.Gloss != "" {
