@@ -58,7 +58,7 @@ type Model struct {
 
 	cursorWord    int
 	pendingG      bool
-	lastSavedLine int // line last written via position.Save; -1 until the first save, so line 0 still gets persisted once
+	lastSavedWord int // cursorWord last written via position.Save; -1 until the first save, so word 0 still gets persisted once
 
 	// visualAnchor is the fixed end of the in-progress document selection
 	// (stateVisual), set to cursorWord when visual mode began; cursorWord is
@@ -113,12 +113,23 @@ func New(cfg Config) Model {
 		cardedWords:   make(map[int]bool),
 		words:         words,
 		lineFirstWord: lineFirstWord,
-		lastSavedLine: -1,
+		lastSavedWord: -1,
 	}
 
 	if cfg.Document.SourceID != "" {
-		if line, ok := position.Load(cfg.Document.SourceID); ok && line >= 0 && line < len(lineFirstWord) {
-			m.cursorWord = lineFirstWord[line]
+		if pos, ok := position.Load(cfg.Document.SourceID); ok && pos.Line >= 0 && pos.Line < len(lineFirstWord) {
+			lineStart := lineFirstWord[pos.Line]
+			lineEnd := len(words)
+			if pos.Line+1 < len(lineFirstWord) {
+				lineEnd = lineFirstWord[pos.Line+1]
+			}
+			m.cursorWord = lineStart + pos.Word
+			if max := lineEnd - 1; m.cursorWord > max {
+				m.cursorWord = max
+			}
+			if m.cursorWord < lineStart {
+				m.cursorWord = lineStart
+			}
 		}
 	}
 

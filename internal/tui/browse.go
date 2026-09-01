@@ -274,7 +274,7 @@ func (m *Model) syncViewport() {
 	m.lineVisualLine = lineVisualLine
 
 	docLine := m.lineOfCursor()
-	m.savePosition(docLine)
+	m.savePosition()
 
 	line := lineVisualLine[docLine]
 	top := m.viewport.YOffset
@@ -286,16 +286,19 @@ func (m *Model) syncViewport() {
 	}
 }
 
-// savePosition persists docLine as the resume point for this document, so
-// quitting out (accidentally or otherwise) doesn't lose the reader's place.
-// It writes on every line change rather than only at quit time, since a
-// killed terminal or crash never gets a chance to run quit handling.
-func (m *Model) savePosition(docLine int) {
-	if m.cfg.Document.SourceID == "" || docLine == m.lastSavedLine {
+// savePosition persists the cursor's exact word as the resume point for
+// this document, so quitting out (accidentally or otherwise) doesn't lose
+// the reader's place. It writes on every cursor move rather than only at
+// quit time, since a killed terminal or crash never gets a chance to run
+// quit handling.
+func (m *Model) savePosition() {
+	if m.cfg.Document.SourceID == "" || m.cursorWord == m.lastSavedWord {
 		return
 	}
-	m.lastSavedLine = docLine
-	_ = position.Save(m.cfg.Document.SourceID, docLine) // best-effort; losing the resume point isn't worth surfacing an error over
+	m.lastSavedWord = m.cursorWord
+	line := m.lineOfCursor()
+	pos := position.Position{Line: line, Word: m.cursorWord - m.lineFirstWord[line]}
+	_ = position.Save(m.cfg.Document.SourceID, pos) // best-effort; losing the resume point isn't worth surfacing an error over
 }
 
 func (m *Model) jumpToNextMatch(dir int) {
