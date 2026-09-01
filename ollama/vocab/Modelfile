@@ -3,8 +3,14 @@
 # SYSTEM prompt below, replace the MESSAGE few-shot examples with
 # word/sentence/answer triples in that language, then build it under a new
 # name with `ollama create <name> -f Modelfile` (see README.md).
+#
+# {{.BaseModel}} below is a text/template placeholder filled in by
+# `ankix install --base-model` (see ollama/vocab/modelfile.go) and by
+# `mise run create BASE_MODEL=...` (see ollama/vocab/mise.toml). Editing this
+# file directly with `ollama create -f Modelfile` will NOT work as-is —
+# render it first.
 
-FROM llama3.2:3b
+FROM {{.BaseModel}}
 
 PARAMETER temperature 0
 PARAMETER num_predict 24

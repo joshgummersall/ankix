@@ -11,28 +11,35 @@ import (
 )
 
 func newInstallCmd() *cobra.Command {
-	var model string
+	var model, baseModel string
 
 	cmd := &cobra.Command{
 		Use:   "install",
 		Short: "Build the local Ollama model ankix uses for definitions",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return installModel(model)
+			return installModel(model, baseModel)
 		},
 	}
 	cmd.Flags().StringVar(&model, "model", "ankix", "name to give the Ollama model")
+	cmd.Flags().StringVar(&baseModel, "base-model", vocab.DefaultBaseModel, "Ollama model to build the gloss model FROM (must already be pulled, e.g. via ollama pull)")
 
 	return cmd
 }
 
-// installModel writes the embedded Modelfile (ollama/vocab/Modelfile) to a
-// temp file and hands it to the ollama CLI, which is the only supported way
-// to build a model from a Modelfile (the HTTP /api/create endpoint takes the
-// same content but shells out to ollama is simpler and matches what users
-// would otherwise run by hand).
-func installModel(model string) error {
+// installModel renders the embedded Modelfile (ollama/vocab/Modelfile) with
+// the requested base model, writes it to a temp file, and hands it to the
+// ollama CLI, which is the only supported way to build a model from a
+// Modelfile (the HTTP /api/create endpoint takes the same content but
+// shelling out to ollama is simpler and matches what users would otherwise
+// run by hand).
+func installModel(model, baseModel string) error {
 	if _, err := exec.LookPath("ollama"); err != nil {
 		return fmt.Errorf("ollama not found on PATH: install it from https://ollama.com, then re-run `ankix install`")
+	}
+
+	rendered, err := vocab.Render(baseModel)
+	if err != nil {
+		return fmt.Errorf("render modelfile: %w", err)
 	}
 
 	tmp, err := os.CreateTemp("", "ankix-modelfile-*")
@@ -41,7 +48,7 @@ func installModel(model string) error {
 	}
 	defer os.Remove(tmp.Name())
 
-	if _, err := tmp.WriteString(vocab.Modelfile); err != nil {
+	if _, err := tmp.WriteString(rendered); err != nil {
 		tmp.Close()
 		return fmt.Errorf("write modelfile: %w", err)
 	}

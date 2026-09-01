@@ -31,6 +31,18 @@ After installing, build the local Ollama model once:
 ankix install
 ```
 
+By default this builds `ankix` on top of `llama3.2:3b`. Pass `--base-model`
+to build on a different Ollama model instead (it must already be pulled,
+e.g. via `ollama pull qwen2.5:14b`):
+
+```
+ankix install --base-model qwen2.5:14b
+```
+
+This only swaps the base model the same prompt and few-shot examples run
+on — see [Using a different language](#using-a-different-language) below if
+you want to change the prompt itself.
+
 ## `ankix kindle` — Kindle vocabulary builder
 
 ```
