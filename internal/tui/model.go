@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/joshgummersall/ankix/internal/anki"
+	"github.com/joshgummersall/ankix/internal/position"
 	"github.com/joshgummersall/ankix/internal/translate"
 )
 
@@ -55,8 +56,9 @@ type Model struct {
 	lineFirstWord  []int  // lineFirstWord[i] = index into words of line i's first word
 	lineVisualLine []int  // lineVisualLine[i] = wrapped viewport line that line i starts on, set by syncViewport
 
-	cursorWord int
-	pendingG   bool
+	cursorWord    int
+	pendingG      bool
+	lastSavedLine int // line last written via position.Save; -1 until the first save, so line 0 still gets persisted once
 
 	// visualAnchor is the fixed end of the in-progress document selection
 	// (stateVisual), set to cursorWord when visual mode began; cursorWord is
@@ -103,7 +105,7 @@ func New(cfg Config) Model {
 		}
 	}
 
-	return Model{
+	m := Model{
 		cfg:           cfg,
 		state:         stateBrowse,
 		searchInput:   si,
@@ -111,7 +113,16 @@ func New(cfg Config) Model {
 		cardedWords:   make(map[int]bool),
 		words:         words,
 		lineFirstWord: lineFirstWord,
+		lastSavedLine: -1,
 	}
+
+	if cfg.Document.SourceID != "" {
+		if line, ok := position.Load(cfg.Document.SourceID); ok && line >= 0 && line < len(lineFirstWord) {
+			m.cursorWord = lineFirstWord[line]
+		}
+	}
+
+	return m
 }
 
 func (m Model) Init() tea.Cmd {
