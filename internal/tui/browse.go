@@ -6,6 +6,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/joshgummersall/ankix/internal/position"
 )
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -271,7 +273,10 @@ func (m *Model) syncViewport() {
 	m.viewport.SetContent(content)
 	m.lineVisualLine = lineVisualLine
 
-	line := lineVisualLine[m.lineOfCursor()]
+	docLine := m.lineOfCursor()
+	m.savePosition()
+
+	line := lineVisualLine[docLine]
 	top := m.viewport.YOffset
 	bottom := top + m.viewport.Height
 	if line < top {
@@ -279,6 +284,21 @@ func (m *Model) syncViewport() {
 	} else if line >= bottom {
 		m.viewport.SetYOffset(line - m.viewport.Height + 1)
 	}
+}
+
+// savePosition persists the cursor's exact word as the resume point for
+// this document, so quitting out (accidentally or otherwise) doesn't lose
+// the reader's place. It writes on every cursor move rather than only at
+// quit time, since a killed terminal or crash never gets a chance to run
+// quit handling.
+func (m *Model) savePosition() {
+	if m.cfg.Document.SourceID == "" || m.cursorWord == m.lastSavedWord {
+		return
+	}
+	m.lastSavedWord = m.cursorWord
+	line := m.lineOfCursor()
+	pos := position.Position{Line: line, Word: m.cursorWord - m.lineFirstWord[line]}
+	_ = position.Save(m.cfg.Document.SourceID, pos) // best-effort; losing the resume point isn't worth surfacing an error over
 }
 
 func (m *Model) jumpToNextMatch(dir int) {
