@@ -7,13 +7,17 @@ import (
 
 	"github.com/joshgummersall/ankix/internal/anki"
 	"github.com/joshgummersall/ankix/internal/dict"
-	"github.com/joshgummersall/ankix/internal/dict/ollama"
 	"github.com/joshgummersall/ankix/internal/podcast"
 	"github.com/joshgummersall/ankix/internal/subtitle"
 	"github.com/joshgummersall/ankix/internal/tui"
 )
 
 func runPodcastAppleFetch(url string) error {
+	provider, err := newDictProvider()
+	if err != nil {
+		return err
+	}
+
 	podcastID, episodeID, err := podcast.ParseAppleURL(url)
 	if err != nil {
 		return err
@@ -46,15 +50,10 @@ func runPodcastAppleFetch(url string) error {
 		return fmt.Errorf("no transcript lines found for %q", item.Title)
 	}
 
-	return launchPodcastTUI(cues, item.Title, item.AudioURL)
+	return launchPodcastTUI(provider, cues, item.Title, item.AudioURL)
 }
 
-func launchPodcastTUI(cues []subtitle.Cue, title, audioURL string) error {
-	var provider dict.Provider
-	if !noGloss {
-		provider = ollama.New(ollamaURL, ollamaModel)
-	}
-
+func launchPodcastTUI(provider dict.Provider, cues []subtitle.Cue, title, audioURL string) error {
 	client := anki.New(ankiConnectURL)
 	if names, err := client.ModelNames(); err == nil {
 		found := false

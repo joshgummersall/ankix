@@ -8,7 +8,6 @@ import (
 
 	"github.com/joshgummersall/ankix/internal/anki"
 	"github.com/joshgummersall/ankix/internal/dict"
-	"github.com/joshgummersall/ankix/internal/dict/ollama"
 	"github.com/joshgummersall/ankix/internal/subtitle"
 	"github.com/joshgummersall/ankix/internal/tui"
 )
@@ -19,6 +18,11 @@ func formatTS(d time.Duration) string {
 }
 
 func runFetch(f *youtubeFlags, url string) error {
+	provider, err := newDictProvider()
+	if err != nil {
+		return err
+	}
+
 	fmt.Printf("fetching %q subtitles via yt-dlp...\n", f.subLang)
 	path, videoID, err := subtitle.Fetch(url, f.subLang, f.cacheDir)
 	if err != nil {
@@ -38,10 +42,15 @@ func runFetch(f *youtubeFlags, url string) error {
 		return fmt.Errorf("no transcript lines found in %s", path)
 	}
 
-	return launchYouTubeTUI(f, transcript, title)
+	return launchYouTubeTUI(f, provider, transcript, title)
 }
 
 func runReview(f *youtubeFlags, path string) error {
+	provider, err := newDictProvider()
+	if err != nil {
+		return err
+	}
+
 	transcript, err := subtitle.ParseVTT(path, path)
 	if err != nil {
 		return fmt.Errorf("parse subtitles: %w", err)
@@ -49,15 +58,10 @@ func runReview(f *youtubeFlags, path string) error {
 	if len(transcript.Cues) == 0 {
 		return fmt.Errorf("no transcript lines found in %s", path)
 	}
-	return launchYouTubeTUI(f, transcript, path)
+	return launchYouTubeTUI(f, provider, transcript, path)
 }
 
-func launchYouTubeTUI(f *youtubeFlags, transcript *subtitle.Transcript, title string) error {
-	var provider dict.Provider
-	if !noGloss {
-		provider = ollama.New(ollamaURL, ollamaModel)
-	}
-
+func launchYouTubeTUI(f *youtubeFlags, provider dict.Provider, transcript *subtitle.Transcript, title string) error {
 	client := anki.New(ankiConnectURL)
 	if names, err := client.ModelNames(); err == nil {
 		found := false

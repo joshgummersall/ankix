@@ -31,13 +31,23 @@ After installing, build the local Ollama model once:
 ankix install
 ```
 
-By default this builds `ankix` on top of `llama3.2:3b`. Pass `--base-model`
-to build on a different Ollama model instead (it must already be pulled,
-e.g. via `ollama pull qwen2.5:14b`):
+Re-run it after every `ankix` upgrade — the prompt lives in the model, so a
+new release usually needs a new build. `ankix` checks this for you and says
+so; see [Keeping the model in sync](#keeping-the-model-in-sync).
 
+By default this builds `ankix` on top of `llama3.2:3b`. To build on a
+different Ollama model (it must already be pulled, e.g. via
+`ollama pull qwen2.5:14b`), set it in your config file:
+
+```toml
+base_model = "qwen2.5:14b"
 ```
-ankix install --base-model qwen2.5:14b
-```
+
+`ankix install` takes no flags — both the name it builds and the model it
+builds FROM come from the config file, because what it produces outlives the
+command. There's no "just this once" for a build: a base model passed on the
+command line would stay installed until the next `ankix install`, which
+every upgrade asks you to run, silently put the default back.
 
 This only swaps the base model the same prompt and few-shot examples run
 on — see [Using a different language](#using-a-different-language) below if
@@ -57,7 +67,8 @@ keeps its built-in default.
 deck = "AnkiX"
 ankiconnect_url = "http://localhost:8765"
 ollama_url = "http://localhost:11434"
-ollama_model = "ankix"
+ollama_model = "ankix"  # the model ankix install builds and every command looks up
+base_model = "llama3.2:3b"  # what ankix install builds that model FROM
 no_gloss = false
 lang = "es"          # seeds --lang (kindle) and --sub-lang (youtube)
 
@@ -123,9 +134,10 @@ Flags:
 
 - `--lang` — language prefix to filter words by, e.g. `en`, `es` (default `en`)
 - `--deck` — Anki deck to sync into (default `Kindle Vocab`)
-- `--model` — Ollama model used to define words (default `ankix`)
 - `--tag` — tags applied to new notes (default `AnkiX::Source::Kindle`)
-- `--dry-run` — preview without writing to Anki
+- `--limit` — only the N most recently looked-up words (0 for no limit)
+- `--headless` — sync straight through, skipping the interactive review
+- `--dry-run` — preview without writing to Anki (only with `--headless`)
 - `--eject` — eject the Kindle's volume after a successful sync (macOS only)
 - `--ankiconnect-url` — AnkiConnect endpoint (default `http://localhost:8765`)
 
@@ -177,7 +189,7 @@ Flags (persistent across both subcommands):
 - `--deck` — Anki deck name (default `AnkiX`)
 - `--ankiconnect-url` — AnkiConnect URL (default `http://localhost:8765`)
 - `--ollama-url` — Ollama URL (default `http://localhost:11434`)
-- `--ollama-model` — Ollama gloss model name (default `ankix`)
+- `--ollama-model` — Ollama gloss model name (default `ankix`; see [Keeping the model in sync](#keeping-the-model-in-sync))
 - `--sub-lang` — subtitle language code (default `es`)
 - `--cache-dir` — subtitle cache directory
 - `--no-gloss` — skip Ollama gloss lookups
@@ -197,7 +209,7 @@ Flags:
 - `--deck` — Anki deck name (default `AnkiX`)
 - `--ankiconnect-url` — AnkiConnect URL (default `http://localhost:8765`)
 - `--ollama-url` — Ollama URL (default `http://localhost:11434`)
-- `--ollama-model` — Ollama gloss model name (default `ankix`)
+- `--ollama-model` — Ollama gloss model name (default `ankix`; see [Keeping the model in sync](#keeping-the-model-in-sync))
 - `--no-gloss` — skip Ollama gloss lookups
 
 ## Fixing a translation
@@ -228,10 +240,57 @@ the correction, since it no longer describes the same words.
 is inert under `--no-gloss`. It edits the preview only — cards already synced
 to Anki aren't touched.
 
-**This needs the model rebuilt.** The correction format lives in
-`ollama/vocab/Modelfile`, so run `ankix install` once after upgrading. An
-older model treats `Correction: shorter` as a new word to translate; ankix
-can't detect that, but the resulting error suggests the rebuild.
+**This needs the model rebuilt** after upgrading — `ankix` will tell you so
+and refuse to run until you do, rather than quietly using the old one. See
+[Keeping the model in sync](#keeping-the-model-in-sync).
+
+## Keeping the model in sync
+
+`ankix`'s prompt lives inside the Ollama model, not the binary, so the two
+have to agree — a new release with new prompt rules is useless against a
+model built by the old one. Rather than detect that after the fact, the two
+are bound by name: `ankix install` tags the model with a checksum of the
+Modelfile it was built from, and every command asks for exactly that tag.
+
+```
+$ ankix install
+model "ankix:f12a425b6b17" ready
+
+$ ollama list
+ankix:f12a425b6b17    1a243fa51a81    2.0 GB
+```
+
+A model built by an older release is therefore not stale so much as
+unaddressable — the new binary is asking for a name that doesn't exist yet,
+and says so before doing any work:
+
+```
+$ ankix web fetch https://example.com
+error: the "ankix" model is out of date: found ankix:9c04d1e7f8a2,
+  but this version of ankix needs ankix:f12a425b6b17
+run `ankix install` to build it (the older build is left alone, and keeps
+  working with the older ankix)
+```
+
+Old builds are kept, not deleted: they share their weights with the new one
+so they cost almost nothing, and an older `ankix` binary keeps working
+against the tag it expects. Remove one with `ollama rm ankix:<tag>` when you
+no longer want it.
+
+The checksum covers the prompt only, not the base model — which model you
+build on is your choice and doesn't change the name (`ollama show` will tell
+you which one a build used). That choice lives in the config file's
+`base_model`, so the rebuild each upgrade asks for keeps it.
+
+`ollama_model` (and its `--ollama-model` flag) names the model in one place
+for both sides — `ankix install` builds it and every other command looks it
+up. There's deliberately no separate flag for the name to install under: a
+second way to say it would just be a second way to disagree.
+
+To point `ankix` at a model you built yourself, give `--ollama-model` an
+explicit tag (`--ollama-model myfork:v1`). A name with a `:` in it is used
+verbatim, with no checksum appended and no rebuild prompting — see
+[Using a different language](#using-a-different-language).
 
 ## Using a different language
 
@@ -244,9 +303,13 @@ are written for Spanish-to-English glossing.
 To study another language, fork `ollama/vocab/Modelfile` (or replace it in
 place) with a system prompt and examples for that language, then either:
 
-- run `mise run setup` (or `ankix install --model <name>`) to build it under
-  a new Ollama model name, and pass `--model`/`--ollama-model <name>` when
-  running `kindle`/`youtube`, or
+- set `ollama_model = "<name>"` in your config file and run `ankix install`
+  — it builds `<name>:<checksum>` and every command looks that up, with
+  nothing to pass per invocation (`--ollama-model` overrides it for one
+  run), or
+- build it by hand (`mise run create`, or `ollama create <name>:<tag> -f
+  Modelfile`) and pass the full `--ollama-model <name>:<tag>`, which `ankix`
+  uses verbatim, or
 - rebuild the default `ankix` model in place if you only need one language
   at a time.
 

@@ -6,12 +6,18 @@ description = "Install ollama/ dependencies"
 run = "pnpm install"
 
 [tasks.create]
-description = "Create the ankix Ollama model from Modelfile (set BASE_MODEL to build on a different Ollama model, default llama3.2:3b)"
+description = "Create the ankix Ollama model from Modelfile (set BASE_MODEL to build on a different Ollama model, default llama3.2:3b; MODEL to name it something other than ankix)"
+# The tag must match vocab.Tag/vocab.Checksum in modelfile.go — the binary
+# only ever asks for ankix:<sha256 of this Modelfile, first 12 hex chars>,
+# so a model built under any other name won't be found. The checksum covers
+# the Modelfile as committed, before BASE_MODEL is substituted in.
 run = """
+name="${MODEL:-ankix}:$(shasum -a 256 Modelfile | cut -c1-12)"
 tmp=$(mktemp)
 sed "s#^FROM .*#FROM ${BASE_MODEL:-llama3.2:3b}#" Modelfile > "$tmp"
-ollama create ankix -f "$tmp"
+ollama create "$name" -f "$tmp"
 rm "$tmp"
+echo "built $name"
 """
 
 [tasks.eval]

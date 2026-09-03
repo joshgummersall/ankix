@@ -64,7 +64,11 @@ func newKindleVocabCmd(cfg config) *cobra.Command {
 }
 
 func runSync(o *syncOptions) (err error) {
-	provider := ollama.New(ollamaURL, ollamaModel)
+	model, err := resolveModel(ollamaURL, ollamaModel)
+	if err != nil {
+		return err
+	}
+	provider := ollama.New(ollamaURL, model)
 
 	// A headless dry run never writes anything, including Mastered markers,
 	// so a read-only handle is enough; every other run (including every

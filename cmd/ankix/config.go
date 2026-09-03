@@ -16,7 +16,13 @@ type config struct {
 	AnkiConnectURL string `toml:"ankiconnect_url"`
 	OllamaURL      string `toml:"ollama_url"`
 	OllamaModel    string `toml:"ollama_model"`
-	NoGloss        bool   `toml:"no_gloss"`
+	// BaseModel is the Ollama model `ankix install` builds the gloss model
+	// FROM. It belongs here rather than only on the flag because every
+	// upgrade re-runs `ankix install` (see vocab.Tag), and a base model
+	// chosen once on the command line would silently revert to the default
+	// on the next rebuild.
+	BaseModel string `toml:"base_model"`
+	NoGloss   bool   `toml:"no_gloss"`
 	// Lang is the target language being studied. It seeds Kindle's --lang
 	// filter and YouTube's --sub-lang unless a command-specific value below
 	// overrides it.
