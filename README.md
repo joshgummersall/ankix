@@ -37,16 +37,17 @@ so; see [Keeping the model in sync](#keeping-the-model-in-sync).
 
 By default this builds `ankix` on top of `llama3.2:3b`. To build on a
 different Ollama model (it must already be pulled, e.g. via
-`ollama pull qwen2.5:14b`), put it in your config file so it survives the
-rebuilds later upgrades ask for:
+`ollama pull qwen2.5:14b`), set it in your config file:
 
 ```toml
 base_model = "qwen2.5:14b"
 ```
 
-`--base-model` overrides it for a single run, but since every upgrade
-re-runs `ankix install`, a choice made only on the command line reverts to
-the default the next time. The config file is the durable place for it.
+`ankix install` takes no flags — both the name it builds and the model it
+builds FROM come from the config file, because what it produces outlives the
+command. There's no "just this once" for a build: a base model passed on the
+command line would stay installed until the next `ankix install`, which
+every upgrade asks you to run, silently put the default back.
 
 This only swaps the base model the same prompt and few-shot examples run
 on — see [Using a different language](#using-a-different-language) below if
@@ -278,8 +279,8 @@ no longer want it.
 
 The checksum covers the prompt only, not the base model — which model you
 build on is your choice and doesn't change the name (`ollama show` will tell
-you which one a build used). Keep that choice in the config file's
-`base_model`, though: a rebuild with no config reverts to the default.
+you which one a build used). That choice lives in the config file's
+`base_model`, so the rebuild each upgrade asks for keeps it.
 
 `ollama_model` (and its `--ollama-model` flag) names the model in one place
 for both sides — `ankix install` builds it and every other command looks it

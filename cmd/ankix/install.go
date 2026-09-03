@@ -11,25 +11,31 @@ import (
 	"github.com/joshgummersall/ankix/ollama/vocab"
 )
 
+// newInstallCmd deliberately defines no flags of its own. Both inputs come
+// from config: the name to build is the global --ollama-model, the same one
+// every other command looks up, and the base model to build FROM is
+// `base_model`.
+//
+// A --base-model flag would be incoherent rather than merely redundant.
+// install's output is the durable artifact, so there is no "just this once"
+// for it: building on a base passed once on the command line leaves that
+// base installed until the next `ankix install` silently reverts it — which
+// every upgrade asks you to run. Config is the only place the choice can
+// actually survive.
 func newInstallCmd(cfg config) *cobra.Command {
-	var baseModel string
-
-	cmd := &cobra.Command{
+	return &cobra.Command{
 		Use:   "install",
 		Short: "Build the local Ollama model ankix uses for definitions",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Deliberately the global --ollama-model rather than an
-			// install-only flag: the name install builds and the name
-			// every other command looks up are one thing, and two ways to
-			// say it is two ways to disagree.
-			return installModel(ollamaModel, baseModel)
+			return installModel(ollamaModel, baseModelFor(cfg))
 		},
 	}
-	// base_model has to survive the rebuild each upgrade asks for, so it
-	// defaults from the config file like everything else.
-	cmd.Flags().StringVar(&baseModel, "base-model", strOr(cfg.BaseModel, vocab.DefaultBaseModel), "Ollama model to build the gloss model FROM; must already be pulled, e.g. via ollama pull (config: base_model)")
+}
 
-	return cmd
+// baseModelFor is the Ollama model `ankix install` builds the gloss model
+// FROM.
+func baseModelFor(cfg config) string {
+	return strOr(cfg.BaseModel, vocab.DefaultBaseModel)
 }
 
 // installModel renders the embedded Modelfile (ollama/vocab/Modelfile) with

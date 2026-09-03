@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/spf13/pflag"
+
 	"github.com/joshgummersall/ankix/internal/anki"
 	"github.com/joshgummersall/ankix/ollama/vocab"
 )
@@ -130,30 +132,29 @@ func writeFile(t *testing.T, path, content string) {
 // Every upgrade re-runs `ankix install` (the model is pinned to the
 // Modelfile checksum), so a base model picked once on the command line
 // would revert to the default on the next rebuild. It has to be durable.
-func TestInstallCmd_BaseModelDefaultsFromConfig(t *testing.T) {
-	cfg := config{BaseModel: "qwen2.5:14b"}
-	got := newInstallCmd(cfg).Flag("base-model").DefValue
-	if got != "qwen2.5:14b" {
-		t.Errorf("--base-model default = %q, want the configured base_model", got)
+func TestBaseModelFor_UsesTheConfiguredBaseModel(t *testing.T) {
+	if got := baseModelFor(config{BaseModel: "qwen2.5:14b"}); got != "qwen2.5:14b" {
+		t.Errorf("baseModelFor = %q, want the configured base_model", got)
 	}
 }
 
-func TestInstallCmd_BaseModelFallsBackToTheDefaultBaseModel(t *testing.T) {
-	got := newInstallCmd(config{}).Flag("base-model").DefValue
-	if got != vocab.DefaultBaseModel {
-		t.Errorf("--base-model default = %q, want %q", got, vocab.DefaultBaseModel)
+func TestBaseModelFor_FallsBackToTheDefaultBaseModel(t *testing.T) {
+	if got := baseModelFor(config{}); got != vocab.DefaultBaseModel {
+		t.Errorf("baseModelFor = %q, want %q", got, vocab.DefaultBaseModel)
 	}
 }
 
-// install builds the model every other command then looks up, so there is
-// deliberately only one way to name it: the global --ollama-model. An
-// install-only flag would be a second source of truth, and setting
-// ollama_model would build one name while every command searched for
-// another.
-func TestInstallCmd_HasNoModelNameFlagOfItsOwn(t *testing.T) {
-	if f := newInstallCmd(config{}).Flags().Lookup("model"); f != nil {
-		t.Error("install defines its own --model flag; the name it builds must come from the global --ollama-model")
-	}
+// install's inputs are both durable config: the name to build is the global
+// --ollama-model (the same one every command looks up), and the base model
+// comes from `base_model`. A flag for either would be a transient input
+// producing a persistent artifact — build once with it, and the next
+// `ankix install`, which every upgrade asks for, silently reverts.
+func TestInstallCmd_TakesNoFlagsOfItsOwn(t *testing.T) {
+	newInstallCmd(config{}).Flags().VisitAll(func(f *pflag.Flag) {
+		if f.Name != "help" {
+			t.Errorf("install defines --%s; both its inputs must come from config", f.Name)
+		}
+	})
 }
 
 func TestLoadConfigFrom_ReadsBaseModel(t *testing.T) {
