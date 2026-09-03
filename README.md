@@ -35,13 +35,18 @@ Re-run it after every `ankix` upgrade — the prompt lives in the model, so a
 new release usually needs a new build. `ankix` checks this for you and says
 so; see [Keeping the model in sync](#keeping-the-model-in-sync).
 
-By default this builds `ankix` on top of `llama3.2:3b`. Pass `--base-model`
-to build on a different Ollama model instead (it must already be pulled,
-e.g. via `ollama pull qwen2.5:14b`):
+By default this builds `ankix` on top of `llama3.2:3b`. To build on a
+different Ollama model (it must already be pulled, e.g. via
+`ollama pull qwen2.5:14b`), put it in your config file so it survives the
+rebuilds later upgrades ask for:
 
+```toml
+base_model = "qwen2.5:14b"
 ```
-ankix install --base-model qwen2.5:14b
-```
+
+`--base-model` overrides it for a single run, but since every upgrade
+re-runs `ankix install`, a choice made only on the command line reverts to
+the default the next time. The config file is the durable place for it.
 
 This only swaps the base model the same prompt and few-shot examples run
 on — see [Using a different language](#using-a-different-language) below if
@@ -61,7 +66,8 @@ keeps its built-in default.
 deck = "AnkiX"
 ankiconnect_url = "http://localhost:8765"
 ollama_url = "http://localhost:11434"
-ollama_model = "ankix"
+ollama_model = "ankix"  # the model ankix install builds and every command looks up
+base_model = "llama3.2:3b"  # what ankix install builds that model FROM
 no_gloss = false
 lang = "es"          # seeds --lang (kindle) and --sub-lang (youtube)
 
@@ -269,9 +275,14 @@ so they cost almost nothing, and an older `ankix` binary keeps working
 against the tag it expects. Remove one with `ollama rm ankix:<tag>` when you
 no longer want it.
 
-The checksum covers the prompt only, not `--base-model` — which base model
-you build on is your choice and doesn't change the name (`ollama show` will
-tell you which one a build used).
+The checksum covers the prompt only, not the base model — which model you
+build on is your choice and doesn't change the name (`ollama show` will tell
+you which one a build used). Keep that choice in the config file's
+`base_model`, though: a rebuild with no config reverts to the default.
+
+`ollama_model` names the model in one place, for both sides — `ankix
+install` builds it and every other command looks it up — so the two can't
+drift apart.
 
 To point `ankix` at a model you built yourself, give `--ollama-model` an
 explicit tag (`--ollama-model myfork:v1`). A name with a `:` in it is used
@@ -289,9 +300,9 @@ are written for Spanish-to-English glossing.
 To study another language, fork `ollama/vocab/Modelfile` (or replace it in
 place) with a system prompt and examples for that language, then either:
 
-- run `ankix install --model <name>` to build it under a new Ollama model
-  name — that tags it `<name>:<checksum>` the same way, so pass
-  `--model`/`--ollama-model <name>` and it resolves automatically, or
+- set `ollama_model = "<name>"` in your config file and run `ankix install`
+  — it builds `<name>:<checksum>` and every command looks that up, with
+  nothing to pass per invocation (`--model` overrides it for one run), or
 - build it by hand (`mise run create`, or `ollama create <name>:<tag> -f
   Modelfile`) and pass the full `--ollama-model <name>:<tag>`, which `ankix`
   uses verbatim, or

@@ -11,7 +11,7 @@ import (
 	"github.com/joshgummersall/ankix/ollama/vocab"
 )
 
-func newInstallCmd() *cobra.Command {
+func newInstallCmd(cfg config) *cobra.Command {
 	var model, baseModel string
 
 	cmd := &cobra.Command{
@@ -21,8 +21,12 @@ func newInstallCmd() *cobra.Command {
 			return installModel(model, baseModel)
 		},
 	}
-	cmd.Flags().StringVar(&model, "model", "ankix", "name to give the Ollama model")
-	cmd.Flags().StringVar(&baseModel, "base-model", vocab.DefaultBaseModel, "Ollama model to build the gloss model FROM (must already be pulled, e.g. via ollama pull)")
+	// Both default from the same config keys the other commands read:
+	// `ollama_model` names the model every command looks up, so building
+	// something else would leave nothing to find, and `base_model` has to
+	// survive the rebuild each upgrade asks for.
+	cmd.Flags().StringVar(&model, "model", strOr(cfg.OllamaModel, "ankix"), "name to give the Ollama model (config: ollama_model)")
+	cmd.Flags().StringVar(&baseModel, "base-model", strOr(cfg.BaseModel, vocab.DefaultBaseModel), "Ollama model to build the gloss model FROM; must already be pulled, e.g. via ollama pull (config: base_model)")
 
 	return cmd
 }

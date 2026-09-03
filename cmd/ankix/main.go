@@ -73,7 +73,7 @@ func main() {
 	root.PersistentFlags().StringVar(&ollamaModel, "ollama-model", strOr(cfg.OllamaModel, "ankix"), "Ollama gloss model; a bare name is pinned to the Modelfile checksum ankix install built (e.g. ankix:"+vocab.Checksum()+"), a name with an explicit :tag is used as-is")
 	root.PersistentFlags().BoolVar(&noGloss, "no-gloss", cfg.NoGloss, "skip Ollama gloss lookups")
 
-	root.AddCommand(newInstallCmd())
+	root.AddCommand(newInstallCmd(cfg))
 	root.AddCommand(newKindleCmd(cfg))
 	root.AddCommand(newYouTubeCmd(cfg))
 	root.AddCommand(newPodcastCmd())

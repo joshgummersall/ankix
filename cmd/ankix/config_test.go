@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/joshgummersall/ankix/internal/anki"
+	"github.com/joshgummersall/ankix/ollama/vocab"
 )
 
 func TestLoadConfigFrom_TrimsMultilineCardTemplates(t *testing.T) {
@@ -123,5 +124,56 @@ func writeFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+// Every upgrade re-runs `ankix install` (the model is pinned to the
+// Modelfile checksum), so a base model picked once on the command line
+// would revert to the default on the next rebuild. It has to be durable.
+func TestInstallCmd_BaseModelDefaultsFromConfig(t *testing.T) {
+	cfg := config{BaseModel: "qwen2.5:14b"}
+	got := newInstallCmd(cfg).Flag("base-model").DefValue
+	if got != "qwen2.5:14b" {
+		t.Errorf("--base-model default = %q, want the configured base_model", got)
+	}
+}
+
+func TestInstallCmd_BaseModelFallsBackToTheDefaultBaseModel(t *testing.T) {
+	got := newInstallCmd(config{}).Flag("base-model").DefValue
+	if got != vocab.DefaultBaseModel {
+		t.Errorf("--base-model default = %q, want %q", got, vocab.DefaultBaseModel)
+	}
+}
+
+// install builds the model every other command then looks up, so the two
+// have to read the same config key — otherwise setting ollama_model builds
+// one name and searches for another.
+func TestInstallCmd_ModelNameMatchesTheNameCommandsLookUp(t *testing.T) {
+	cfg := config{OllamaModel: "ankix-es"}
+
+	installName := newInstallCmd(cfg).Flag("model").DefValue
+	lookupName := strOr(cfg.OllamaModel, "ankix")
+
+	if installName != lookupName {
+		t.Errorf("install builds %q but commands look up %q", installName, lookupName)
+	}
+}
+
+func TestInstallCmd_ModelNameFallsBackToAnkix(t *testing.T) {
+	if got := newInstallCmd(config{}).Flag("model").DefValue; got != "ankix" {
+		t.Errorf("--model default = %q, want %q", got, "ankix")
+	}
+}
+
+func TestLoadConfigFrom_ReadsBaseModel(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	writeFile(t, path, "base_model = \"qwen2.5:14b\"\n")
+
+	cfg, err := loadConfigFrom(path)
+	if err != nil {
+		t.Fatalf("loadConfigFrom() error = %v", err)
+	}
+	if cfg.BaseModel != "qwen2.5:14b" {
+		t.Errorf("BaseModel = %q, want %q", cfg.BaseModel, "qwen2.5:14b")
 	}
 }
