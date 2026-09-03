@@ -170,12 +170,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.refreshGlosses()
 
 	case glossResultMsg:
-		if msg.idx < len(m.ps.phrases) && m.ps.phrases[msg.idx].previewText == msg.text {
-			m.ps.phrases[msg.idx].previewPending = false
-			m.ps.phrases[msg.idx].preview = msg.gloss
-			m.ps.phrases[msg.idx].previewLemma = msg.lemma
-			m.ps.phrases[msg.idx].previewErr = msg.err
-		}
+		m.ps.applyPreview(msg.idx, msg.text, msg.gloss, msg.lemma, msg.err)
 		return m, nil
 
 	case submitResultMsg:

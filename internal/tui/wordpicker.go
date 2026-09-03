@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -26,21 +25,15 @@ func (m *Model) enterWordPick() {
 	m.state = stateWordPick
 }
 
-// refreshGlosses kicks off a gloss lookup for every non-deleted, standalone
-// phrase whose current text hasn't been looked up yet (or has changed since
-// it last was, e.g. after an expansion or merge), so a preview of what will
-// be saved is visible before submitting.
+// refreshGlosses kicks off a gloss lookup for every phrase whose text is
+// not previewed yet, so what will be saved is visible before submitting.
 func (m *Model) refreshGlosses() tea.Cmd {
 	if m.cfg.Dict == nil {
 		return nil
 	}
-	text := func(p *phrase[struct{}]) string {
-		return m.sentence[m.ps.tokens[m.ps.wordTokens[p.lo]].start:m.ps.tokens[m.ps.wordTokens[p.hi]].end]
-	}
-	lookup := func(i int, text string) tea.Cmd {
+	return m.ps.refreshPreviews(m.sentence, func(i int, text string) tea.Cmd {
 		return fetchGlossCmd(m.cfg.Dict, text, m.sentence, i, text)
-	}
-	return m.ps.refreshPreviews(text, lookup)
+	})
 }
 
 func (m Model) handleWordPickKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -87,20 +80,17 @@ func (m Model) handleWordPickKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // submitWordPick builds a card for every non-deleted phrase in the sentence
 // and submits them all in one action.
 func (m Model) submitWordPick() (tea.Model, tea.Cmd) {
-	for _, p := range m.ps.phrases {
-		if p.mergedInto == -1 && !p.deleted && p.previewPending {
-			m.setStatus("still looking up glosses...", false)
-			return m, nil
-		}
+	if m.ps.previewsPending() {
+		m.setStatus("still looking up glosses...", false)
+		return m, nil
 	}
 
 	var notes []anki.Note
 	for _, p := range m.ps.phrases {
-		if p.mergedInto != -1 || p.deleted {
+		if !p.included() {
 			continue
 		}
-		start := m.ps.tokens[m.ps.wordTokens[p.lo]].start
-		end := m.ps.tokens[m.ps.wordTokens[p.hi]].end
+		start, end := m.ps.phraseBounds(p)
 		sel := anki.WordSelection{Start: start, End: end, Gloss: p.preview, Lemma: p.previewLemma}
 		notes = append(notes, m.cfg.BuildNote(m.selLineIndex, m.sentence, sel))
 	}
@@ -115,19 +105,10 @@ func (m Model) submitWordPick() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleWordExpandKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "l", "right":
-		m.ps.moveExpandCursor(1)
-		return m, m.ps.debounceRefresh()
-	case "h", "left":
-		m.ps.moveExpandCursor(-1)
-		return m, m.ps.debounceRefresh()
-	case "esc":
-		m.ps.cancelExpand()
-		m.state = stateWordPick
-		m.setStatus("", false)
-		return m, m.refreshGlosses()
-	case "enter":
+	switch action, cmd := m.ps.handleExpandKey(msg); action {
+	case expandMoved:
+		return m, cmd
+	case expandConfirmed, expandCanceled:
 		m.state = stateWordPick
 		m.setStatus("", false)
 		return m, m.refreshGlosses()
@@ -143,12 +124,7 @@ func (m Model) renderWordPicker() string {
 	var b strings.Builder
 	b.WriteString(m.ps.render(m.sentence))
 
-	cards := 0
-	for _, p := range m.ps.phrases {
-		if p.mergedInto == -1 && !p.deleted {
-			cards++
-		}
-	}
+	cards := m.ps.countIncluded()
 	word := "card"
 	if cards != 1 {
 		word = "cards"
@@ -163,27 +139,7 @@ func (m Model) renderWordPicker() string {
 	b.WriteString("\n")
 
 	if m.cfg.Dict != nil {
-		ordered := make([]phrase[struct{}], len(m.ps.phrases))
-		copy(ordered, m.ps.phrases)
-		sort.Slice(ordered, func(i, j int) bool { return ordered[i].lo < ordered[j].lo })
-		for _, p := range ordered {
-			if p.mergedInto != -1 || p.deleted {
-				continue
-			}
-			text := m.sentence[m.ps.tokens[m.ps.wordTokens[p.lo]].start:m.ps.tokens[m.ps.wordTokens[p.hi]].end]
-			switch {
-			case p.previewPending:
-				fmt.Fprintf(&b, "%s: looking up...\n", text)
-			case p.previewErr != nil:
-				fmt.Fprintf(&b, "%s: lookup failed (%v)\n", text, p.previewErr)
-			case p.preview == "":
-				fmt.Fprintf(&b, "%s: (none)\n", text)
-			case p.previewLemma != "":
-				fmt.Fprintf(&b, "%s: %s (%s)\n", text, p.preview, p.previewLemma)
-			default:
-				fmt.Fprintf(&b, "%s: %s\n", text, p.preview)
-			}
-		}
+		b.WriteString(m.ps.renderPreviews(m.sentence))
 	}
 
 	if m.state == stateSubmitting {
