@@ -4,6 +4,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -23,6 +26,7 @@ type syncOptions struct {
 	dryRun   bool
 	limit    int
 	headless bool
+	eject    bool
 }
 
 func newKindleCmd(cfg config) *cobra.Command {
@@ -52,13 +56,14 @@ func newKindleVocabCmd(cfg config) *cobra.Command {
 	cmd.Flags().BoolVar(&o.dryRun, "dry-run", false, "print what would be synced without writing to Anki (only applies with --headless; the interactive review lets you inspect/skip each word before it's added)")
 	cmd.Flags().IntVar(&o.limit, "limit", 0, "limit to the N most recently looked-up words (0 for no limit)")
 	cmd.Flags().BoolVar(&o.headless, "headless", false, "sync every word straight through without the interactive review TUI (e.g. for cron/automation)")
+	cmd.Flags().BoolVar(&o.eject, "eject", false, "eject the Kindle's volume after a successful sync (macOS only)")
 
 	cmd.AddCommand(newKindleVocabDbCmd())
 
 	return cmd
 }
 
-func runSync(o *syncOptions) error {
+func runSync(o *syncOptions) (err error) {
 	provider := ollama.New(ollamaURL, ollamaModel)
 
 	// A headless dry run never writes anything, including Mastered markers,
@@ -73,6 +78,14 @@ func runSync(o *syncOptions) error {
 	if err != nil {
 		return err
 	}
+	// Registered before db.Close so it runs after (defers are LIFO), and
+	// only ejects once the volume's file is safely closed and the sync
+	// itself succeeded.
+	defer func() {
+		if err == nil && o.eject {
+			err = ejectVolume(o.dbPath)
+		}
+	}()
 	defer db.Close()
 
 	entries, err := kindle.Entries(db, o.lang, false)
@@ -159,6 +172,33 @@ func runSync(o *syncOptions) error {
 	}
 
 	fmt.Printf("\ndone: %d added, %d already in Anki, %d skipped (no definition)\n", added, skippedExisting, skippedNoDefinition)
+	return nil
+}
+
+// ejectVolume ejects the removable volume containing path via diskutil.
+// Kindle mounts as a USB volume under /Volumes on macOS; it errors on any
+// other OS or any path not under a mounted volume.
+func ejectVolume(path string) error {
+	if runtime.GOOS != "darwin" {
+		return fmt.Errorf("--eject is only supported on macOS")
+	}
+
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+
+	const volumesDir = "/Volumes/"
+	if !strings.HasPrefix(abs, volumesDir) {
+		return fmt.Errorf("%s is not on a mounted volume under %s, skipping --eject", abs, volumesDir)
+	}
+	volume := volumesDir + strings.SplitN(strings.TrimPrefix(abs, volumesDir), "/", 2)[0]
+
+	out, err := exec.Command("diskutil", "eject", volume).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("eject %s: %w: %s", volume, err, strings.TrimSpace(string(out)))
+	}
+	fmt.Printf("ejected %s\n", volume)
 	return nil
 }
 

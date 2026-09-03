@@ -125,6 +125,7 @@ Flags:
 - `--model` — Ollama model used to define words (default `ankix`)
 - `--tag` — tags applied to new notes (default `AnkiX::Source::Kindle`)
 - `--dry-run` — preview without writing to Anki
+- `--eject` — eject the Kindle's volume after a successful sync (macOS only)
 - `--ankiconnect-url` — AnkiConnect endpoint (default `http://localhost:8765`)
 
 Only words not already marked Mastered in `vocab.db` are considered, and any
