@@ -23,6 +23,7 @@ var helpBindings = [][2]string{
 	{"v (word pick)", "expand/add the word under the cursor as a phrase"},
 	{"d (word pick)", "delete the nearest word/phrase"},
 	{"e (word pick)", "edit the sentence to fix typos before marking words"},
+	{"r (word pick)", "tell the model what to fix about a translation"},
 	{"enter (word pick)", "add every marked word/phrase as its own card"},
 	{"h / l (expand)", "extend phrase — move the cursor, vim-visual-mode style"},
 	{"esc", "cancel / back out"},

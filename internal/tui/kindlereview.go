@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textarea"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -21,6 +22,7 @@ const (
 	kPicking kState = iota
 	kExpanding
 	kEditSentence
+	kRefine
 	kSubmitting
 	kDone
 )
@@ -88,6 +90,11 @@ type KindleModel struct {
 	// in that sentence — see enterEditSentence.
 	sentenceInput textarea.Model
 
+	// refineInput collects a free-form correction for the definition of
+	// phrases[refineIdx] — see enterRefine.
+	refineInput textinput.Model
+	refineIdx   int
+
 	added, duplicates, skipped int
 
 	status    string
@@ -105,7 +112,12 @@ func NewKindleReview(cfg KindleConfig) KindleModel {
 	sei.SetWidth(120)
 	sei.SetHeight(3)
 
-	m := KindleModel{cfg: cfg, groups: kindle.GroupBySentence(cfg.Entries), sentenceInput: sei}
+	m := KindleModel{
+		cfg:           cfg,
+		groups:        kindle.GroupBySentence(cfg.Entries),
+		sentenceInput: sei,
+		refineInput:   newRefineInput(),
+	}
 	m.initCmd = m.loadGroup(0)
 	return m
 }
@@ -140,8 +152,8 @@ func (m *KindleModel) refreshDefinitions() tea.Cmd {
 	if m.cfg.Dict == nil {
 		return nil
 	}
-	return m.ps.refreshPreviews(m.sentence, func(i int, text string) tea.Cmd {
-		return kindleDefCmd(m.cfg.Dict, text, m.sentence, i, text)
+	return m.ps.refreshPreviews(m.sentence, func(i, gen int, text string) tea.Cmd {
+		return kindleDefCmd(m.cfg.Dict, text, m.sentence, i, gen)
 	})
 }
 
@@ -167,8 +179,12 @@ func (m *KindleModel) pickingStatus() string {
 	if cards != 1 {
 		word = "cards"
 	}
-	return fmt.Sprintf("sentence %d/%d — %d %s will be added — h/l move, v expand/add word, d delete word, e edit sentence, enter add",
-		m.groupIdx+1, len(m.groups), cards, word)
+	refine := ""
+	if _, ok := refineAvailable(m.cfg.Dict); ok {
+		refine = "r refine, "
+	}
+	return fmt.Sprintf("sentence %d/%d — %d %s will be added — h/l move, v expand/add word, d delete word, e edit sentence, %senter add",
+		m.groupIdx+1, len(m.groups), cards, word, refine)
 }
 
 // addPhraseAtCursor adds a new single-word phrase for the word under the
@@ -213,6 +229,7 @@ func (m KindleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.sentenceInput.SetWidth(msg.Width)
+		m.refineInput.Width = msg.Width
 		return m, nil
 
 	case tea.KeyMsg:
@@ -225,7 +242,7 @@ func (m KindleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.refreshDefinitions()
 
 	case kindleDefResultMsg:
-		m.ps.applyPreview(msg.idx, msg.text, msg.definition, msg.lemma, msg.err)
+		m.ps.applyPreview(msg.idx, msg.gen, msg.definition, msg.lemma, msg.err, msg.refined)
 		return m, nil
 
 	case kindleBatchSubmitResultMsg:
@@ -251,7 +268,10 @@ func (m KindleModel) handleKindleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if m.state != kEditSentence {
+	// Both text prompts handle ctrl+c themselves and must keep every other
+	// rune, including a bare q — "quitar" typed into a correction would
+	// otherwise quit mid-review and lose the whole sentence group.
+	if m.state != kEditSentence && m.state != kRefine {
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
@@ -265,6 +285,8 @@ func (m KindleModel) handleKindleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleExpandingKey(msg)
 	case kEditSentence:
 		return m.handleEditSentenceKey(msg)
+	case kRefine:
+		return m.handleRefineKey(msg)
 	}
 	return m, nil
 }
@@ -291,6 +313,9 @@ func (m KindleModel) handlePickingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "e":
 		return m, m.enterEditSentence()
+	case "r":
+		cmd := m.enterRefine()
+		return m, cmd
 	case "enter":
 		return m.submitGroup()
 	}
@@ -436,6 +461,10 @@ func (m KindleModel) renderKindlePicker() string {
 		b.WriteString(m.ps.renderPreviews(m.sentence))
 	}
 
+	if m.state == kRefine && m.refineIdx < len(m.ps.phrases) {
+		b.WriteString(renderRefinePrompt(m.ps.phraseText(m.sentence, m.ps.phrases[m.refineIdx]), m.refineInput))
+	}
+
 	return "\n" + b.String() + "\n"
 }
 
@@ -449,28 +478,46 @@ func (m KindleModel) helpText() string {
 		return "h/l extend selection  enter confirm  esc cancel"
 	case kEditSentence:
 		return "enter confirm edit  esc cancel"
+	case kRefine:
+		return "type a correction  enter apply  esc cancel"
 	case kSubmitting:
 		return "submitting..."
 	default:
-		return "h/l move  v expand/add word under cursor  d delete word  e edit sentence  enter add all  q quit"
+		refine := ""
+		if _, ok := refineAvailable(m.cfg.Dict); ok {
+			refine = "  r refine translation"
+		}
+		return "h/l move  v expand/add word under cursor  d delete word  e edit sentence" + refine + "  enter add all  q quit"
 	}
 }
 
 // kindleDefResultMsg carries a definition lookup result back for the phrase
-// at idx, tagged with the text it was fetched for (text) so a stale result
-// for a phrase that's since changed can be ignored.
+// at idx, tagged with the lookup generation it was issued under (gen) so a
+// stale result for a phrase that's since changed can be ignored. refined
+// marks a result that came from a user correction rather than a plain
+// lookup.
 type kindleDefResultMsg struct {
 	idx        int
-	text       string
+	gen        int
 	definition string
 	lemma      string
 	err        error
+	refined    bool
 }
 
-func kindleDefCmd(p dict.Provider, phrase, sentence string, idx int, text string) tea.Cmd {
+func kindleDefCmd(p dict.Provider, phrase, sentence string, idx, gen int) tea.Cmd {
 	return func() tea.Msg {
 		def, lemma, err := p.Define(phrase, sentence)
-		return kindleDefResultMsg{idx: idx, text: text, definition: def, lemma: lemma, err: err}
+		return kindleDefResultMsg{idx: idx, gen: gen, definition: def, lemma: lemma, err: err}
+	}
+}
+
+// kindleRefineCmd re-asks r for a definition the user wasn't happy with,
+// passing the answer being corrected plus their instruction.
+func kindleRefineCmd(r dict.Refiner, phrase, sentence, definition, lemma, instruction string, idx, gen int) tea.Cmd {
+	return func() tea.Msg {
+		def, l, err := r.Refine(phrase, sentence, definition, lemma, instruction)
+		return kindleDefResultMsg{idx: idx, gen: gen, definition: def, lemma: l, err: err, refined: true}
 	}
 }
 

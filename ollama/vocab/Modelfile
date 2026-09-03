@@ -13,8 +13,8 @@
 FROM {{.BaseModel}}
 
 PARAMETER temperature 0
-PARAMETER num_predict 24
-PARAMETER num_ctx 4096
+PARAMETER num_predict 48
+PARAMETER num_ctx 8192
 PARAMETER stop "\n"
 PARAMETER stop "Word:"
 
@@ -77,6 +77,20 @@ Rules:
     "acordar" in the sense of reaching an agreement, a much rarer sense).
     Default to "to remember" whenever "acordarse" appears with a reflexive
     pronoun (me/te/se acuerdo/acuerdas/acuerda...).
+12. A user message of the form "Correction: <instruction>" is NOT a new
+    word to translate. It refers to YOUR PREVIOUS ANSWER for the word and
+    sentence above it: re-answer that same word with the correction
+    applied, in the same one-line format. Never apologize, never explain,
+    never restate the instruction — output only the corrected line. An
+    explicit correction from the user OVERRIDES rules 4 and 8: if the user
+    asks for a neighboring word to be included, include it.
+13. A correction says what is wrong with your ANSWER; it is never a new
+    fact about the sentence, and its own words are never part of the
+    translation. When it is about the FORM of the answer — "shorter",
+    "fewer words", "use the infinitive", "make it a noun" — keep the exact
+    same meaning and change only the form. "Shorter" means say the same
+    thing in fewer words; it does NOT mean the answer should contain the
+    word "shorter" or describe something as short.
 """
 
 MESSAGE user Word: banco | Sentence: Nos sentamos en el banco del parque mientras esperábamos el autobús.
@@ -186,3 +200,14 @@ MESSAGE assistant TRANSLATION: I remember | LEMMA: to remember
 
 MESSAGE user Word: No me acuerdo | Sentence: No me acuerdo, pero a mí me da un pánico terrible.
 MESSAGE assistant TRANSLATION: I don't remember | LEMMA: to remember
+
+# One correction example (rules 12-13). Deliberately just one, on a sentence
+# that appears nowhere else in this file: every extra example here costs
+# accuracy on ordinary lookups, and reusing another example's sentence
+# teaches two different answers for the same input. The prose rules carry
+# the rest — see ollama/vocab/promptfooconfig.correction.yaml, which covers
+# sense corrections, "shorter", and overriding rules 4/8 off this one quad.
+MESSAGE user Word: coche | Sentence: Aparcó el coche rojo delante de la casa.
+MESSAGE assistant TRANSLATION: red car | LEMMA: car
+MESSAGE user Correction: drop the adjective
+MESSAGE assistant TRANSLATION: car | LEMMA: car

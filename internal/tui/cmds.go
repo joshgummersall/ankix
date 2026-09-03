@@ -10,14 +10,16 @@ import (
 )
 
 // glossResultMsg carries a gloss lookup result back for the phrase at idx,
-// tagged with the text it was fetched for (text) so a stale result for a
-// phrase that's since changed can be ignored.
+// tagged with the lookup generation it was issued under (gen) so a stale
+// result for a phrase that's since changed can be ignored. refined marks a
+// result that came from a user correction rather than a plain lookup.
 type glossResultMsg struct {
-	idx   int
-	text  string
-	gloss string
-	lemma string
-	err   error
+	idx     int
+	gen     int
+	gloss   string
+	lemma   string
+	err     error
+	refined bool
 }
 
 type submitResultMsg struct {
@@ -26,10 +28,20 @@ type submitResultMsg struct {
 	err        error // first non-duplicate error encountered, if any
 }
 
-func fetchGlossCmd(p dict.Provider, word, sentence string, idx int, text string) tea.Cmd {
+func fetchGlossCmd(p dict.Provider, word, sentence string, idx, gen int) tea.Cmd {
 	return func() tea.Msg {
 		gloss, lemma, err := p.Define(word, sentence)
-		return glossResultMsg{idx: idx, text: text, gloss: gloss, lemma: lemma, err: err}
+		return glossResultMsg{idx: idx, gen: gen, gloss: gloss, lemma: lemma, err: err}
+	}
+}
+
+// refineGlossCmd re-asks r for a gloss the user wasn't happy with, passing
+// the answer being corrected plus their instruction. The result comes back
+// as an ordinary glossResultMsg so both paths land in one handler.
+func refineGlossCmd(r dict.Refiner, word, sentence, gloss, lemma, instruction string, idx, gen int) tea.Cmd {
+	return func() tea.Msg {
+		g, l, err := r.Refine(word, sentence, gloss, lemma, instruction)
+		return glossResultMsg{idx: idx, gen: gen, gloss: g, lemma: l, err: err, refined: true}
 	}
 }
 

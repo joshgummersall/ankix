@@ -18,3 +18,18 @@ type Provider interface {
 	// the lookup process couldn't run).
 	Define(word, usage string) (definition, lemma string, err error)
 }
+
+// Refiner is an optional Provider capability: re-deriving a definition from
+// a user's free-form correction of a previous answer ("drop the adjective",
+// "it's a verb here"). Not every source can take a correction — a plain
+// dictionary lookup has nothing to re-ask — so it's a separate interface,
+// and callers type-assert for it and offer no refinement when it's absent.
+type Refiner interface {
+	// Refine re-answers word as used in usage, given the definition and
+	// lemma already returned for it and an instruction describing what's
+	// wrong with them. lemma follows Define's convention on the way in and
+	// out: "" when it doesn't differ from the definition, so a refined
+	// answer is shaped exactly like a fresh one and refining a refinement
+	// round-trips.
+	Refine(word, usage, definition, lemma, instruction string) (newDefinition, newLemma string, err error)
+}

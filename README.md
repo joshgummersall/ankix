@@ -169,6 +169,9 @@ ankix youtube review <transcript-file.vtt>
 terminal UI for browsing and generating cards; `review` opens an existing
 `.vtt` transcript file directly, skipping `yt-dlp`.
 
+Once words are marked, `r` on a marked word re-prompts the model to fix its
+translation — see [Fixing a translation](#fixing-a-translation).
+
 Flags (persistent across both subcommands):
 
 - `--deck` — Anki deck name (default `AnkiX`)
@@ -196,6 +199,39 @@ Flags:
 - `--ollama-url` — Ollama URL (default `http://localhost:11434`)
 - `--ollama-model` — Ollama gloss model name (default `ankix`)
 - `--no-gloss` — skip Ollama gloss lookups
+
+## Fixing a translation
+
+Small local models drift: a translation comes back with an extra adjective
+("new keys" for `llaves`), or picks the literal sense of a word the sentence
+is using figuratively. Rather than delete the word and lose the card, put the
+cursor on it in the review screen and press `r`, then type what's wrong with
+the answer in plain language:
+
+```
+llaves: new keys (key)
+
+  refine: drop the adjective
+
+llaves: keys (key)
+```
+
+The instruction is sent to the model as a follow-up turn on its own answer,
+so it corrects that line rather than translating a new word — and an explicit
+correction outranks the prompt's own "don't include neighboring words" rules,
+which is what makes "include the noun it modifies" work. Corrections chain:
+each one starts from the current answer, so you can narrow in over a couple
+of passes. Re-scoping the phrase with `v` (or deleting it with `d`) discards
+the correction, since it no longer describes the same words.
+
+`r` works in the Kindle, YouTube, podcast, web and file review screens, and
+is inert under `--no-gloss`. It edits the preview only — cards already synced
+to Anki aren't touched.
+
+**This needs the model rebuilt.** The correction format lives in
+`ollama/vocab/Modelfile`, so run `ankix install` once after upgrading. An
+older model treats `Correction: shorter` as a new word to translate; ankix
+can't detect that, but the resulting error suggests the rebuild.
 
 ## Using a different language
 

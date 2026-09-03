@@ -37,6 +37,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleWordExpandKey(msg)
 	case stateEditSentence:
 		return m.handleEditSentenceKey(msg)
+	case stateRefine:
+		return m.handleRefineKey(msg)
 	}
 	return m, nil
 }
