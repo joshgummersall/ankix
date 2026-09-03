@@ -78,11 +78,12 @@ func askContent(word, usage string) string {
 func collapse(resp string) (definition, lemma string, err error) {
 	translation, l, ok := parseReply(resp)
 	if !ok {
-		// A model built before the "Correction:" rule existed answers a
-		// correction as if it were a new word, and a too-low num_predict
-		// truncates the reply before the "|" — both land here, and both
-		// are fixed by rebuilding the model.
-		return "", "", fmt.Errorf("ollama chat: unexpected reply %q; if you haven't rebuilt the model lately, run `ankix install`", resp)
+		// ankix pins the model to its Modelfile's checksum, so a stock
+		// install can't answer in the wrong format — reaching here means a
+		// model chosen with --ollama-model that wasn't built from an ankix
+		// Modelfile, or one whose num_predict truncates the reply before
+		// the "|".
+		return "", "", fmt.Errorf("ollama chat: unexpected reply %q; the model isn't answering in ankix's `TRANSLATION: ... | LEMMA: ...` format", resp)
 	}
 	if l == "" || strings.EqualFold(l, translation) {
 		return translation, "", nil
@@ -151,6 +152,8 @@ func (p *Provider) chat(msgs []chatMessage) (string, error) {
 		}
 		json.NewDecoder(resp.Body).Decode(&e)
 		if strings.Contains(e.Error, "not found") {
+			// Normally caught by the startup preflight (see cmd/ankix's
+			// resolveModel); this covers a model removed mid-session.
 			return "", fmt.Errorf("ollama chat: model %q not found; run `ankix install` to build it", p.Model)
 		}
 		return "", fmt.Errorf("ollama chat: unexpected status %s", resp.Status)

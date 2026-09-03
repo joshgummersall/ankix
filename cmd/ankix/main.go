@@ -9,6 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/joshgummersall/ankix/ollama/vocab"
+
 	"github.com/joshgummersall/ankix/internal/anki"
 )
 
@@ -52,11 +54,23 @@ func main() {
 	root := &cobra.Command{
 		Use:   "ankix",
 		Short: "Generate Anki cards from Kindle vocab, YouTube transcripts, podcast transcripts, web articles, and local files",
+		// main below is the single place errors are printed; without this
+		// cobra prints its own copy first.
+		SilenceErrors: true,
+		// Cobra validates args before running this, so anything failing
+		// from here on is a runtime failure (Ollama unreachable, model not
+		// installed, Anki not running), not misuse. Those errors already
+		// say what to do and dumping the flag list underneath buries it —
+		// but a genuine usage error, caught earlier, still gets usage.
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+			cmd.SilenceUsage = true
+			return nil
+		},
 	}
 	root.PersistentFlags().StringVar(&deck, "deck", strOr(cfg.Deck, "AnkiX"), "Anki deck name")
 	root.PersistentFlags().StringVar(&ankiConnectURL, "ankiconnect-url", strOr(cfg.AnkiConnectURL, "http://localhost:8765"), "AnkiConnect URL")
 	root.PersistentFlags().StringVar(&ollamaURL, "ollama-url", strOr(cfg.OllamaURL, "http://localhost:11434"), "Ollama URL")
-	root.PersistentFlags().StringVar(&ollamaModel, "ollama-model", strOr(cfg.OllamaModel, "ankix"), "Ollama gloss model name")
+	root.PersistentFlags().StringVar(&ollamaModel, "ollama-model", strOr(cfg.OllamaModel, "ankix"), "Ollama gloss model; a bare name is pinned to the Modelfile checksum ankix install built (e.g. ankix:"+vocab.Checksum()+"), a name with an explicit :tag is used as-is")
 	root.PersistentFlags().BoolVar(&noGloss, "no-gloss", cfg.NoGloss, "skip Ollama gloss lookups")
 
 	root.AddCommand(newInstallCmd())

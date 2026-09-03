@@ -7,12 +7,16 @@ import (
 
 	"github.com/joshgummersall/ankix/internal/anki"
 	"github.com/joshgummersall/ankix/internal/dict"
-	"github.com/joshgummersall/ankix/internal/dict/ollama"
 	"github.com/joshgummersall/ankix/internal/tui"
 	"github.com/joshgummersall/ankix/internal/web"
 )
 
 func runWebFetch(f *webFlags, url string) error {
+	provider, err := newDictProvider()
+	if err != nil {
+		return err
+	}
+
 	fmt.Println("fetching and extracting article...")
 	article, err := web.Fetch(url)
 	if err != nil {
@@ -25,15 +29,10 @@ func runWebFetch(f *webFlags, url string) error {
 	}
 	doc := &tui.Document{SourceID: article.URL, Lines: lines}
 
-	return launchWebTUI(f, doc, article.Title, article.URL)
+	return launchWebTUI(f, provider, doc, article.Title, article.URL)
 }
 
-func launchWebTUI(f *webFlags, doc *tui.Document, title, url string) error {
-	var provider dict.Provider
-	if !noGloss {
-		provider = ollama.New(ollamaURL, ollamaModel)
-	}
-
+func launchWebTUI(f *webFlags, provider dict.Provider, doc *tui.Document, title, url string) error {
 	client := anki.New(ankiConnectURL)
 	if names, err := client.ModelNames(); err == nil {
 		found := false

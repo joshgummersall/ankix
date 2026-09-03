@@ -128,18 +128,17 @@ func TestRefine_CollapsesLemmaMatchingTranslation(t *testing.T) {
 	}
 }
 
-// A model built before rule 12 existed answers a correction as if it were a
-// new word, and too low a num_predict truncates the reply before the "|".
-// Both surface here, and both are fixed by rebuilding, so the error says so.
-func TestRefine_UnparseableReplySuggestsRebuildingTheModel(t *testing.T) {
+// Too low a num_predict truncates the reply before the "|", as does a model
+// that wasn't built from an ankix Modelfile at all.
+func TestRefine_UnparseableReplyNamesTheExpectedFormat(t *testing.T) {
 	p, _ := newTestProvider(t, "TRANSLATION: whoever you are")
 
 	_, _, err := p.Refine("llaves", "Compré unas llaves.", "new keys", "key", "shorter")
 	if err == nil {
 		t.Fatal("Refine succeeded on a truncated reply, want an error")
 	}
-	if !strings.Contains(err.Error(), "ankix install") {
-		t.Errorf("error = %q, want it to suggest `ankix install`", err)
+	if !strings.Contains(err.Error(), "TRANSLATION") {
+		t.Errorf("error = %q, want it to name the expected reply format", err)
 	}
 }
 

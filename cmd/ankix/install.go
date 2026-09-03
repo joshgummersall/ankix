@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -32,6 +33,11 @@ func newInstallCmd() *cobra.Command {
 // Modelfile (the HTTP /api/create endpoint takes the same content but
 // shelling out to ollama is simpler and matches what users would otherwise
 // run by hand).
+//
+// The model is tagged with the Modelfile's checksum rather than :latest, so
+// the name itself pins the prompt — see vocab.Tag. Every ankix command asks
+// for that exact tag, which is why an upgrade can't quietly keep using the
+// model an older release built.
 func installModel(model, baseModel string) error {
 	if _, err := exec.LookPath("ollama"); err != nil {
 		return fmt.Errorf("ollama not found on PATH: install it from https://ollama.com, then re-run `ankix install`")
@@ -56,14 +62,45 @@ func installModel(model, baseModel string) error {
 		return fmt.Errorf("write modelfile: %w", err)
 	}
 
-	fmt.Printf("building Ollama model %q...\n", model)
-	c := exec.Command("ollama", "create", model, "-f", tmp.Name())
+	tagged := vocab.Tag(model)
+	fmt.Printf("building Ollama model %q...\n", tagged)
+	c := exec.Command("ollama", "create", tagged, "-f", tmp.Name())
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
 	if err := c.Run(); err != nil {
 		return fmt.Errorf("ollama create: %w", err)
 	}
 
-	fmt.Printf("model %q ready\n", model)
+	fmt.Printf("model %q ready\n", tagged)
+	reportOldBuilds(model, tagged)
 	return nil
+}
+
+// reportOldBuilds points out models an earlier ankix left behind. They cost
+// almost nothing — every build of the same base model shares its weights,
+// and only the small prompt layers differ — so they're worth mentioning
+// rather than deleting: an older tag is a working rollback target, and
+// ankix shouldn't remove something the user may have pinned.
+func reportOldBuilds(model, tagged string) {
+	out, err := exec.Command("ollama", "list").Output()
+	if err != nil {
+		return
+	}
+
+	var old []string
+	for line := range strings.Lines(string(out)) {
+		name, _, ok := strings.Cut(strings.TrimSpace(line), " ")
+		if !ok || name == tagged {
+			continue
+		}
+		if repo, _, hasTag := strings.Cut(name, ":"); hasTag && repo == model {
+			old = append(old, name)
+		}
+	}
+	if len(old) == 0 {
+		return
+	}
+
+	fmt.Printf("\nearlier builds still installed: %s\n", strings.Join(old, ", "))
+	fmt.Printf("they share their weights with the new one, so they cost little; remove one with `ollama rm <name>`\n")
 }

@@ -31,6 +31,10 @@ After installing, build the local Ollama model once:
 ankix install
 ```
 
+Re-run it after every `ankix` upgrade — the prompt lives in the model, so a
+new release usually needs a new build. `ankix` checks this for you and says
+so; see [Keeping the model in sync](#keeping-the-model-in-sync).
+
 By default this builds `ankix` on top of `llama3.2:3b`. Pass `--base-model`
 to build on a different Ollama model instead (it must already be pulled,
 e.g. via `ollama pull qwen2.5:14b`):
@@ -228,10 +232,51 @@ the correction, since it no longer describes the same words.
 is inert under `--no-gloss`. It edits the preview only — cards already synced
 to Anki aren't touched.
 
-**This needs the model rebuilt.** The correction format lives in
-`ollama/vocab/Modelfile`, so run `ankix install` once after upgrading. An
-older model treats `Correction: shorter` as a new word to translate; ankix
-can't detect that, but the resulting error suggests the rebuild.
+**This needs the model rebuilt** after upgrading — `ankix` will tell you so
+and refuse to run until you do, rather than quietly using the old one. See
+[Keeping the model in sync](#keeping-the-model-in-sync).
+
+## Keeping the model in sync
+
+`ankix`'s prompt lives inside the Ollama model, not the binary, so the two
+have to agree — a new release with new prompt rules is useless against a
+model built by the old one. Rather than detect that after the fact, the two
+are bound by name: `ankix install` tags the model with a checksum of the
+Modelfile it was built from, and every command asks for exactly that tag.
+
+```
+$ ankix install
+model "ankix:f12a425b6b17" ready
+
+$ ollama list
+ankix:f12a425b6b17    1a243fa51a81    2.0 GB
+```
+
+A model built by an older release is therefore not stale so much as
+unaddressable — the new binary is asking for a name that doesn't exist yet,
+and says so before doing any work:
+
+```
+$ ankix web fetch https://example.com
+error: the "ankix" model is out of date: found ankix:9c04d1e7f8a2,
+  but this version of ankix needs ankix:f12a425b6b17
+run `ankix install` to build it (the older build is left alone, and keeps
+  working with the older ankix)
+```
+
+Old builds are kept, not deleted: they share their weights with the new one
+so they cost almost nothing, and an older `ankix` binary keeps working
+against the tag it expects. Remove one with `ollama rm ankix:<tag>` when you
+no longer want it.
+
+The checksum covers the prompt only, not `--base-model` — which base model
+you build on is your choice and doesn't change the name (`ollama show` will
+tell you which one a build used).
+
+To point `ankix` at a model you built yourself, give `--ollama-model` an
+explicit tag (`--ollama-model myfork:v1`). A name with a `:` in it is used
+verbatim, with no checksum appended and no rebuild prompting — see
+[Using a different language](#using-a-different-language).
 
 ## Using a different language
 
@@ -244,9 +289,12 @@ are written for Spanish-to-English glossing.
 To study another language, fork `ollama/vocab/Modelfile` (or replace it in
 place) with a system prompt and examples for that language, then either:
 
-- run `mise run setup` (or `ankix install --model <name>`) to build it under
-  a new Ollama model name, and pass `--model`/`--ollama-model <name>` when
-  running `kindle`/`youtube`, or
+- run `ankix install --model <name>` to build it under a new Ollama model
+  name — that tags it `<name>:<checksum>` the same way, so pass
+  `--model`/`--ollama-model <name>` and it resolves automatically, or
+- build it by hand (`mise run create`, or `ollama create <name>:<tag> -f
+  Modelfile`) and pass the full `--ollama-model <name>:<tag>`, which `ankix`
+  uses verbatim, or
 - rebuild the default `ankix` model in place if you only need one language
   at a time.
 

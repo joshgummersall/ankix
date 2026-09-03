@@ -9,12 +9,16 @@ import (
 
 	"github.com/joshgummersall/ankix/internal/anki"
 	"github.com/joshgummersall/ankix/internal/dict"
-	"github.com/joshgummersall/ankix/internal/dict/ollama"
 	"github.com/joshgummersall/ankix/internal/textutil"
 	"github.com/joshgummersall/ankix/internal/tui"
 )
 
 func runFileOpen(f *fileFlags, path string) error {
+	provider, err := newDictProvider()
+	if err != nil {
+		return err
+	}
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
@@ -31,15 +35,10 @@ func runFileOpen(f *fileFlags, path string) error {
 	}
 	doc := &tui.Document{SourceID: path, Lines: lines}
 
-	return launchFileTUI(f, doc, filepath.Base(path))
+	return launchFileTUI(f, provider, doc, filepath.Base(path))
 }
 
-func launchFileTUI(f *fileFlags, doc *tui.Document, title string) error {
-	var provider dict.Provider
-	if !noGloss {
-		provider = ollama.New(ollamaURL, ollamaModel)
-	}
-
+func launchFileTUI(f *fileFlags, provider dict.Provider, doc *tui.Document, title string) error {
 	client := anki.New(ankiConnectURL)
 	if names, err := client.ModelNames(); err == nil {
 		found := false
