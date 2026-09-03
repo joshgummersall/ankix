@@ -17,3 +17,7 @@ rm "$tmp"
 [tasks.eval]
 description = "Run promptfoo eval against the ankix model"
 run = "pnpm run eval"
+
+[tasks.eval-correction]
+description = "Run the promptfoo correction eval (multi-turn; pnpm run eval only covers the default config)"
+run = "pnpm exec promptfoo eval -c promptfooconfig.correction.yaml"

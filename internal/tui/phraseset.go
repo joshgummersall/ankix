@@ -85,6 +85,20 @@ type phrase[T any] struct {
 	previewLemma   string
 	previewErr     error
 	previewPending bool
+	// previewGen is the phraseSet-wide lookup generation the in-flight (or
+	// most recent) lookup for this phrase was issued under; a result
+	// carrying any other generation is stale and dropped. Phrase text
+	// alone can't decide that — a refinement doesn't change the text, so
+	// an ordinary lookup still in flight for the same text would otherwise
+	// land on top of it.
+	previewGen int
+	// refined marks a preview the user corrected by hand (see startRefine).
+	// refreshPreviews leaves those alone, so re-scoping a *neighbouring*
+	// phrase — or cancelling an expansion, which reverts lo/hi but not
+	// previewText — can't quietly re-fetch a plain lookup over a
+	// correction. Anything that actually moves this phrase's own bounds
+	// clears it.
+	refined bool
 }
 
 // included reports whether p will produce a card: standalone (not absorbed
@@ -115,6 +129,17 @@ type phraseSet[T any] struct {
 	expandIsNew                bool
 	anchor                     int
 	debounceGen                int // bumped on every expand-mode edit; a stale debounce fire is ignored
+
+	// lookupGen increments once per issued lookup and never repeats within
+	// a phraseSet's life — deliberately not per-phrase, because Kindle
+	// rebuilds phrases wholesale between sentence groups, which would
+	// otherwise reissue generation 1 for a brand new phrase 0 and let a
+	// result from the previous group land on it. refineGen is the
+	// generation of the refinement currently in flight, or 0 for none;
+	// tracking a generation rather than an index means the zero value
+	// already means "nothing being refined", since lookupGen starts at 1.
+	lookupGen int
+	refineGen int
 }
 
 // reset (re)tokenizes sentence and clears every phrase, positioning the
@@ -230,6 +255,8 @@ func (ps *phraseSet[T]) mergeOverlaps(i int) {
 		if ps.phrases[j].hi > ps.phrases[i].hi {
 			ps.phrases[i].hi = ps.phrases[j].hi
 		}
+		// i now covers different words than whatever was refined for it.
+		ps.phrases[i].refined = false
 		for k := range ps.phrases {
 			if ps.phrases[k].mergedInto == j {
 				ps.phrases[k].mergedInto = i
@@ -333,6 +360,7 @@ func (ps *phraseSet[T]) moveExpandCursor(delta int) {
 	}
 	ps.phrases[ps.expandIdx].lo = lo
 	ps.phrases[ps.expandIdx].hi = hi
+	ps.phrases[ps.expandIdx].refined = false
 	ps.mergeOverlaps(ps.expandIdx)
 }
 
@@ -395,6 +423,7 @@ func (ps *phraseSet[T]) deleteNearestPhrase() {
 	ps.phrases[i].previewLemma = ""
 	ps.phrases[i].previewErr = nil
 	ps.phrases[i].previewPending = false
+	ps.phrases[i].refined = false
 }
 
 // phraseBounds returns the byte offsets in the sentence spanned by p's
@@ -436,13 +465,14 @@ func (ps *phraseSet[T]) previewsPending() bool {
 // refreshPreviews kicks off a lookup for every included phrase whose
 // current text hasn't been looked up yet (or has changed since it last was,
 // e.g. after an expansion or merge), so a preview of what will be saved is
-// visible before submitting. lookup issues the caller's actual lookup
-// command (gloss vs definition) for the phrase at i.
-func (ps *phraseSet[T]) refreshPreviews(sentence string, lookup func(i int, text string) tea.Cmd) tea.Cmd {
+// visible before submitting. A phrase the user refined by hand is left
+// alone. lookup issues the caller's actual lookup command (gloss vs
+// definition) for the phrase at i, under the generation it's given.
+func (ps *phraseSet[T]) refreshPreviews(sentence string, lookup func(i, gen int, text string) tea.Cmd) tea.Cmd {
 	var cmds []tea.Cmd
 	for i := range ps.phrases {
 		p := &ps.phrases[i]
-		if !p.included() {
+		if !p.included() || p.refined {
 			continue
 		}
 		t := ps.phraseText(sentence, *p)
@@ -453,25 +483,74 @@ func (ps *phraseSet[T]) refreshPreviews(sentence string, lookup func(i int, text
 		p.preview = ""
 		p.previewLemma = ""
 		p.previewErr = nil
-		p.previewPending = true
-		cmds = append(cmds, lookup(i, t))
+		cmds = append(cmds, lookup(i, ps.startLookup(i), t))
 	}
 	return tea.Batch(cmds...)
 }
 
-// applyPreview records a finished lookup against phrases[idx]. text is the
-// phrase text the lookup was issued for; a result whose text no longer
-// matches the phrase is stale (the phrase changed while it was in flight)
-// and is dropped.
-func (ps *phraseSet[T]) applyPreview(idx int, text, preview, lemma string, err error) {
-	if idx < 0 || idx >= len(ps.phrases) || ps.phrases[idx].previewText != text {
+// startLookup marks phrases[i] as awaiting a fresh lookup and returns the
+// generation to tag that lookup's result with.
+func (ps *phraseSet[T]) startLookup(i int) int {
+	ps.lookupGen++
+	ps.phrases[i].previewPending = true
+	ps.phrases[i].previewGen = ps.lookupGen
+	return ps.lookupGen
+}
+
+// startRefine marks phrases[i] as awaiting a refinement and returns the
+// generation to tag its result with. Unlike startLookup it deliberately
+// leaves preview/previewLemma in place: the answer being corrected stays on
+// screen while the model thinks, and a refinement that fails or comes back
+// unparseable leaves the user with the original rather than nothing.
+func (ps *phraseSet[T]) startRefine(i int) int {
+	ps.phrases[i].previewErr = nil
+	ps.refineGen = ps.startLookup(i)
+	return ps.refineGen
+}
+
+// beginRefine reports the phrase under the cursor as the target of a
+// refinement, or a reason it can't be one. There has to be a settled answer
+// to correct, so a phrase still looking up (or whose lookup failed) isn't
+// eligible.
+func (ps *phraseSet[T]) beginRefine() (idx int, why string) {
+	i, ok := ps.phraseAtCursor()
+	if !ok {
+		return -1, "put the cursor on a marked word first"
+	}
+	if ps.phrases[i].previewPending {
+		return -1, "wait for the lookup to finish"
+	}
+	if ps.phrases[i].previewErr != nil || ps.phrases[i].preview == "" {
+		return -1, "nothing to refine — this word has no translation yet"
+	}
+	return i, ""
+}
+
+// applyPreview records a finished lookup against phrases[idx]. gen is the
+// generation the lookup was issued under; a result from any other
+// generation is stale — the phrase was re-scoped, refined, or rebuilt from
+// a different sentence group while it was in flight — and is dropped.
+// refined marks the result as a user correction, which refreshPreviews then
+// leaves alone.
+func (ps *phraseSet[T]) applyPreview(idx, gen int, preview, lemma string, err error, refined bool) {
+	if idx < 0 || idx >= len(ps.phrases) || ps.phrases[idx].previewGen != gen {
 		return
+	}
+	if gen == ps.refineGen {
+		ps.refineGen = 0
 	}
 	p := &ps.phrases[idx]
 	p.previewPending = false
+	p.previewErr = err
+	if err != nil {
+		// Leave whatever was on screen alone. For a plain lookup there's
+		// nothing there to keep anyway, but a failed refinement would
+		// otherwise throw away the answer it was asked to correct.
+		return
+	}
 	p.preview = preview
 	p.previewLemma = lemma
-	p.previewErr = err
+	p.refined = refined
 }
 
 // debounceExpandMsg fires expandDebounce after an expand-mode edit; gen ties
@@ -590,6 +669,11 @@ func (ps *phraseSet[T]) renderPreviews(sentence string) string {
 		}
 		text := ps.phraseText(sentence, p)
 		switch {
+		case p.previewPending && ps.refineGen != 0 && p.previewGen == ps.refineGen:
+			// A refinement in flight: keep showing what's being corrected
+			// rather than blanking it, so the user can see whether the
+			// answer actually changed.
+			fmt.Fprintf(&b, "%s: %s (refining...)\n", text, p.preview)
 		case p.previewPending:
 			fmt.Fprintf(&b, "%s: looking up...\n", text)
 		case p.previewErr != nil:

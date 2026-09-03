@@ -25,6 +25,7 @@ const (
 	stateWordPick
 	stateWordExpand
 	stateEditSentence
+	stateRefine
 	stateSubmitting
 )
 
@@ -77,6 +78,11 @@ type Model struct {
 	sentenceInput textarea.Model // pre-filled with sentence while editing, for fixing typos; wraps long lines
 	ps            phraseSet[struct{}]
 
+	// refineInput collects a free-form correction for the gloss of
+	// phrases[refineIdx] — see enterRefine.
+	refineInput textinput.Model
+	refineIdx   int
+
 	selLineIndex int // line the current sentence was picked from, passed to Config.BuildNote/PreviewLink
 
 	cardedWords map[int]bool // word indices included in a submitted card
@@ -110,6 +116,7 @@ func New(cfg Config) Model {
 		state:         stateBrowse,
 		searchInput:   si,
 		sentenceInput: sei,
+		refineInput:   newRefineInput(),
 		cardedWords:   make(map[int]bool),
 		words:         words,
 		lineFirstWord: lineFirstWord,
@@ -157,6 +164,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport.Height = vpHeight
 		}
 		m.sentenceInput.SetWidth(msg.Width)
+		m.refineInput.Width = msg.Width
 		m.syncViewport()
 		return m, nil
 
@@ -170,7 +178,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.refreshGlosses()
 
 	case glossResultMsg:
-		m.ps.applyPreview(msg.idx, msg.text, msg.gloss, msg.lemma, msg.err)
+		m.ps.applyPreview(msg.idx, msg.gen, msg.gloss, msg.lemma, msg.err, msg.refined)
 		return m, nil
 
 	case submitResultMsg:
@@ -217,7 +225,7 @@ func (m Model) View() string {
 
 	var body string
 	switch m.state {
-	case stateWordPick, stateWordExpand, stateSubmitting:
+	case stateWordPick, stateWordExpand, stateRefine, stateSubmitting:
 		body = m.renderWordPicker()
 	case stateEditSentence:
 		body = m.renderEditSentence()
@@ -228,7 +236,7 @@ func (m Model) View() string {
 		body = m.viewport.View()
 	}
 
-	if (m.state == stateWordPick || m.state == stateWordExpand || m.state == stateSubmitting) && m.width > 0 {
+	if (m.state == stateWordPick || m.state == stateWordExpand || m.state == stateRefine || m.state == stateSubmitting) && m.width > 0 {
 		body = lipgloss.NewStyle().Width(m.width).Render(body)
 	}
 
@@ -252,7 +260,13 @@ func (m Model) helpText() string {
 	case stateVisual:
 		return "h/l/j/k extend selection  enter complete selection  esc cancel"
 	case stateWordPick:
-		return "h/l move  (/) jump to marked word  v expand/add word  d delete word  e edit sentence  enter add all  esc cancel"
+		refine := ""
+		if _, ok := refineAvailable(m.cfg.Dict); ok {
+			refine = "  r refine translation"
+		}
+		return "h/l move  (/) jump to marked word  v expand/add word  d delete word  e edit sentence" + refine + "  enter add all  esc cancel"
+	case stateRefine:
+		return "type a correction  enter apply  esc cancel"
 	case stateWordExpand:
 		return "h/l extend selection  enter confirm  esc cancel"
 	case stateEditSentence:

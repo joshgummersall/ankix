@@ -31,8 +31,8 @@ func (m *Model) refreshGlosses() tea.Cmd {
 	if m.cfg.Dict == nil {
 		return nil
 	}
-	return m.ps.refreshPreviews(m.sentence, func(i int, text string) tea.Cmd {
-		return fetchGlossCmd(m.cfg.Dict, text, m.sentence, i, text)
+	return m.ps.refreshPreviews(m.sentence, func(i, gen int, text string) tea.Cmd {
+		return fetchGlossCmd(m.cfg.Dict, text, m.sentence, i, gen)
 	})
 }
 
@@ -57,6 +57,9 @@ func (m Model) handleWordPickKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "e":
 		return m, m.enterEditSentence()
+	case "r":
+		cmd := m.enterRefine()
+		return m, cmd
 	case "v":
 		if len(m.ps.wordTokens) == 0 {
 			return m, nil
@@ -140,6 +143,10 @@ func (m Model) renderWordPicker() string {
 
 	if m.cfg.Dict != nil {
 		b.WriteString(m.ps.renderPreviews(m.sentence))
+	}
+
+	if m.state == stateRefine && m.refineIdx < len(m.ps.phrases) {
+		b.WriteString(renderRefinePrompt(m.ps.phraseText(m.sentence, m.ps.phrases[m.refineIdx]), m.refineInput))
 	}
 
 	if m.state == stateSubmitting {

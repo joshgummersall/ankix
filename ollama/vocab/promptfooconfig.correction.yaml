@@ -1,0 +1,102 @@
+# Corrections eval: a three-turn conversation (question, the model's answer,
+# a "Correction:" follow-up), which the one-shot string prompt in
+# promptfooconfig.yaml can't express. Run with `mise run eval-correction`.
+#
+# These exercise Modelfile rule 12: a "Correction:" message revises the
+# answer above it, and an explicit correction outranks rules 4 and 8.
+description: ankix translation correction eval
+
+prompts:
+  - id: correction
+    label: word/answer/correction
+    raw: |
+      [
+        {"role": "user", "content": "Word: {{word}} | Sentence: {{sentence}}"},
+        {"role": "assistant", "content": "TRANSLATION: {{translation}} | LEMMA: {{lemma}}"},
+        {"role": "user", "content": "Correction: {{correction}}"}
+      ]
+
+providers:
+  - id: ollama:chat:ankix
+
+defaultTest:
+  assert:
+    # Whatever the correction asks for, the reply is still exactly one line
+    # in the documented format — never an apology or an explanation.
+    - type: regex
+      value: "^TRANSLATION: .+ \\| LEMMA: .+$"
+
+tests:
+  - description: "drops a neighboring adjective the model shouldn't have included"
+    vars:
+      word: llaves
+      sentence: Compré unas llaves nuevas para la puerta.
+      translation: new keys
+      lemma: key
+      correction: drop the adjective
+    assert:
+      - type: icontains
+        value: "TRANSLATION: keys"
+      - type: not-icontains
+        value: "new keys"
+
+  - description: "picks the domain-specific sense when told what the topic is"
+    vars:
+      word: el arco
+      sentence: Demasiados defensas se interpusieron entre el arco y yo como para meterla yo solo.
+      translation: the arch
+      lemma: arch
+      correction: this is about soccer
+    assert:
+      - type: icontains
+        value: "goal"
+      - type: not-icontains
+        value: "arch"
+
+  - description: "an explicit correction overrides rule 4 (include the neighboring noun)"
+    vars:
+      word: quirúrgico
+      sentence: Tienen que ser de oro, o de plata, o de acero quirúrgico, y no puedo usar otra cosa.
+      translation: surgical
+      lemma: surgical
+      correction: include the noun it modifies
+    assert:
+      - type: icontains
+        value: "surgical steel"
+
+  - description: "fixes a lemma that isn't a 'to ___' infinitive"
+    vars:
+      word: corrí
+      sentence: Ayer corrí cinco kilómetros por el parque.
+      translation: ran
+      lemma: run
+      correction: the lemma should be an infinitive
+    assert:
+      - type: icontains
+        value: "LEMMA: to run"
+
+  # Rule 13: a correction about the form of the answer must not become part
+  # of it. "shorter" asks for fewer words, not for the word "shorter".
+  - description: "shortening keeps the contextual sense rather than restating the instruction"
+    vars:
+      word: relieve
+      sentence: Son islas volcánicas que tienen mucho relieve, muchas montañas.
+      translation: relief from pain
+      lemma: relief
+      correction: shorter
+    assert:
+      - type: not-icontains
+        value: "shorter"
+      - type: not-icontains
+        value: "pain"
+
+  - description: "a correction can steer the sense without naming the answer"
+    vars:
+      word: gregaria
+      sentence: Vivía en una sociedad brutal y gregaria, donde nadie pensaba distinto.
+      translation: social
+      lemma: social
+      correction: it's more negative than that
+    assert:
+      - type: not-icontains
+        value: "negative"

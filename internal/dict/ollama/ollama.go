@@ -35,15 +35,54 @@ func New(url, model string) *Provider {
 // translation as definition, and the dictionary/base-form lemma (e.g. "to
 // realize" for "realized") as lemma when it differs from the translation.
 func (p *Provider) Define(word, usage string) (definition, lemma string, err error) {
-	content := fmt.Sprintf("Word: %s | Sentence: %s", word, usage)
-	resp, err := p.chat(content)
+	resp, err := p.chat([]chatMessage{{Role: "user", Content: askContent(word, usage)}})
 	if err != nil {
 		return "", "", err
 	}
+	return collapse(resp)
+}
 
+// Refine implements dict.Refiner. It replays the original question and the
+// answer the model already gave as a two-turn history, then asks for the
+// correction — so the model corrects its own previous line rather than
+// answering a new question, which is what the Modelfile's "Correction:"
+// rule and few-shot examples are written for.
+func (p *Provider) Refine(word, usage, definition, lemma, instruction string) (string, string, error) {
+	// Define collapses lemma to "" when it matched the translation, so
+	// restore it here: the assistant turn has to look exactly like one the
+	// model would have produced, and it never omits the LEMMA half.
+	if lemma == "" {
+		lemma = definition
+	}
+	resp, err := p.chat([]chatMessage{
+		{Role: "user", Content: askContent(word, usage)},
+		{Role: "assistant", Content: fmt.Sprintf("TRANSLATION: %s | LEMMA: %s", definition, lemma)},
+		{Role: "user", Content: "Correction: " + instruction},
+	})
+	if err != nil {
+		return "", "", err
+	}
+	return collapse(resp)
+}
+
+// askContent formats the per-word question the model expects, as documented
+// in the Modelfile's system prompt.
+func askContent(word, usage string) string {
+	return fmt.Sprintf("Word: %s | Sentence: %s", word, usage)
+}
+
+// collapse parses a model reply and applies the dict.Provider convention of
+// returning "" for a lemma that doesn't differ from the translation. Shared
+// by Define and Refine so a refined answer is shaped exactly like a fresh
+// one.
+func collapse(resp string) (definition, lemma string, err error) {
 	translation, l, ok := parseReply(resp)
 	if !ok {
-		return "", "", fmt.Errorf("ollama chat: unexpected reply %q", resp)
+		// A model built before the "Correction:" rule existed answers a
+		// correction as if it were a new word, and a too-low num_predict
+		// truncates the reply before the "|" — both land here, and both
+		// are fixed by rebuilding the model.
+		return "", "", fmt.Errorf("ollama chat: unexpected reply %q; if you haven't rebuilt the model lately, run `ankix install`", resp)
 	}
 	if l == "" || strings.EqualFold(l, translation) {
 		return translation, "", nil
@@ -89,10 +128,10 @@ type chatResponse struct {
 	Message chatMessage `json:"message"`
 }
 
-func (p *Provider) chat(content string) (string, error) {
+func (p *Provider) chat(msgs []chatMessage) (string, error) {
 	req := chatRequest{
 		Model:    p.Model,
-		Messages: []chatMessage{{Role: "user", Content: content}},
+		Messages: msgs,
 		Stream:   false,
 	}
 	body, err := json.Marshal(req)
