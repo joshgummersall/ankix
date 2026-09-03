@@ -6,10 +6,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/joshgummersall/ankix/internal/anki"
+	"github.com/joshgummersall/ankix/internal/dict"
 	"github.com/joshgummersall/ankix/internal/dict/ollama"
 	"github.com/joshgummersall/ankix/internal/podcast"
 	"github.com/joshgummersall/ankix/internal/subtitle"
-	"github.com/joshgummersall/ankix/internal/translate"
 	"github.com/joshgummersall/ankix/internal/tui"
 )
 
@@ -50,9 +50,9 @@ func runPodcastAppleFetch(url string) error {
 }
 
 func launchPodcastTUI(cues []subtitle.Cue, title, audioURL string) error {
-	var translator translate.Provider
+	var provider dict.Provider
 	if !noGloss {
-		translator = glossProvider{ollama.New(ollamaURL, ollamaModel)}
+		provider = ollama.New(ollamaURL, ollamaModel)
 	}
 
 	client := anki.New(ankiConnectURL)
@@ -83,7 +83,7 @@ func launchPodcastTUI(cues []subtitle.Cue, title, audioURL string) error {
 		Title:      title,
 		Deck:       deck,
 		AnkiClient: client,
-		Translator: translator,
+		Dict:       provider,
 		BuildNote: func(lineIndex int, sentence string, sel anki.WordSelection) anki.Note {
 			return anki.BuildPodcastNote(cardTemplates, deck, title, audioURL, cues[lineIndex].Start, sentence, sel)
 		},

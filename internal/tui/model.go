@@ -13,8 +13,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/joshgummersall/ankix/internal/anki"
+	"github.com/joshgummersall/ankix/internal/dict"
 	"github.com/joshgummersall/ankix/internal/position"
-	"github.com/joshgummersall/ankix/internal/translate"
 )
 
 type state int
@@ -37,7 +37,7 @@ type Config struct {
 	Title       string
 	Deck        string
 	AnkiClient  *anki.Client
-	Translator  translate.Provider // nil if glossing is disabled
+	Dict        dict.Provider // nil if glossing is disabled
 	BuildNote   func(lineIndex int, sentence string, sel anki.WordSelection) anki.Note
 	PreviewLink func(lineIndex int) string // nil, or returns "" for no link
 }
@@ -173,6 +173,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.idx < len(m.ps.phrases) && m.ps.phrases[msg.idx].previewText == msg.text {
 			m.ps.phrases[msg.idx].previewPending = false
 			m.ps.phrases[msg.idx].preview = msg.gloss
+			m.ps.phrases[msg.idx].previewLemma = msg.lemma
 			m.ps.phrases[msg.idx].previewErr = msg.err
 		}
 		return m, nil

@@ -7,26 +7,15 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/joshgummersall/ankix/internal/anki"
+	"github.com/joshgummersall/ankix/internal/dict"
 	"github.com/joshgummersall/ankix/internal/dict/ollama"
 	"github.com/joshgummersall/ankix/internal/subtitle"
-	"github.com/joshgummersall/ankix/internal/translate"
 	"github.com/joshgummersall/ankix/internal/tui"
 )
 
 func formatTS(d time.Duration) string {
 	total := int(d.Seconds())
 	return fmt.Sprintf("%02d:%02d", total/60, total%60)
-}
-
-// glossProvider adapts the shared dict/ollama Provider (which defines words
-// for the kindle flow) to translate.Provider, so youtube can reuse the same
-// Ollama model instead of maintaining a near-duplicate client.
-type glossProvider struct {
-	*ollama.Provider
-}
-
-func (g glossProvider) Gloss(word, sentence string) (string, error) {
-	return g.Define(word, sentence)
 }
 
 func runFetch(f *youtubeFlags, url string) error {
@@ -64,9 +53,9 @@ func runReview(f *youtubeFlags, path string) error {
 }
 
 func launchYouTubeTUI(f *youtubeFlags, transcript *subtitle.Transcript, title string) error {
-	var translator translate.Provider
+	var provider dict.Provider
 	if !noGloss {
-		translator = glossProvider{ollama.New(ollamaURL, ollamaModel)}
+		provider = ollama.New(ollamaURL, ollamaModel)
 	}
 
 	client := anki.New(ankiConnectURL)
@@ -95,7 +84,7 @@ func launchYouTubeTUI(f *youtubeFlags, transcript *subtitle.Transcript, title st
 		Title:      title,
 		Deck:       deck,
 		AnkiClient: client,
-		Translator: translator,
+		Dict:       provider,
 		BuildNote: func(lineIndex int, sentence string, sel anki.WordSelection) anki.Note {
 			return anki.BuildYouTubeNote(cardTemplates, deck, title, videoID, cues[lineIndex].Start, sentence, sel)
 		},

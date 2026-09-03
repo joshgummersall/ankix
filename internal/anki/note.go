@@ -7,11 +7,13 @@ import (
 )
 
 // WordSelection is a word or phrase marked within a sentence, given as a
-// byte range [Start,End) into that sentence, plus its English gloss (may
-// be empty if lookup is disabled or still pending).
+// byte range [Start,End) into that sentence, plus its English gloss and
+// dictionary/base-form lemma (both may be empty if lookup is disabled or
+// still pending, and Lemma is "" whenever it doesn't differ from Gloss).
 type WordSelection struct {
 	Start, End int
 	Gloss      string
+	Lemma      string
 }
 
 // BuildYouTubeNote constructs a Basic (Front/Back) note for a single marked
@@ -30,6 +32,7 @@ func BuildYouTubeNote(tmpl *Templates, deck, videoTitle, videoID string, cueStar
 		After:       sentence[sel.End:],
 		Highlighted: true,
 		Definition:  sel.Gloss,
+		Lemma:       sel.Lemma,
 		Source:      videoTitle,
 		Timestamp:   timestamp,
 		Link:        link,
@@ -63,6 +66,7 @@ func BuildNote(tmpl *Templates, deck, title, url, sourceTag, sentence string, se
 		After:       sentence[sel.End:],
 		Highlighted: true,
 		Definition:  sel.Gloss,
+		Lemma:       sel.Lemma,
 		Source:      title,
 		Link:        url,
 		LinkLabel:   "read",
@@ -96,6 +100,7 @@ func BuildPodcastNote(tmpl *Templates, deck, episodeTitle, audioURL string, cueS
 		After:       sentence[sel.End:],
 		Highlighted: true,
 		Definition:  sel.Gloss,
+		Lemma:       sel.Lemma,
 		Source:      episodeTitle,
 		Timestamp:   timestamp,
 		Link:        link,

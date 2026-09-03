@@ -93,6 +93,7 @@ syntax is trimmed automatically. The data available to both templates
 | `After`       | sentence text after `Word` if `Highlighted`, else the whole (unmarked) sentence |
 | `Highlighted` | whether `Before`/`Word`/`After` is an actual split of a sentence            |
 | `Definition`  | formatted definition or gloss (HTML), `""` if none                          |
+| `Lemma`       | dictionary/base-form lemma, e.g. `"to realize"` for `"realized"`; `""` if none or same as `Definition` |
 | `Source`      | video/episode/page title, `""` for Kindle                                   |
 | `Timestamp`   | e.g. `"3:41"`, `""` if not applicable                                       |
 | `Link`        | deep link URL, `""` if none                                                 |

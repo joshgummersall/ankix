@@ -32,23 +32,23 @@ func New(url, model string) *Provider {
 }
 
 // Define implements dict.Provider. It returns the model's contextual
-// translation, with the dictionary/base-form lemma in parentheses when it
-// differs (e.g. "realized (to realize)").
-func (p *Provider) Define(word, usage string) (string, error) {
+// translation as definition, and the dictionary/base-form lemma (e.g. "to
+// realize" for "realized") as lemma when it differs from the translation.
+func (p *Provider) Define(word, usage string) (definition, lemma string, err error) {
 	content := fmt.Sprintf("Word: %s | Sentence: %s", word, usage)
 	resp, err := p.chat(content)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	translation, lemma, ok := parseReply(resp)
+	translation, l, ok := parseReply(resp)
 	if !ok {
-		return "", fmt.Errorf("ollama chat: unexpected reply %q", resp)
+		return "", "", fmt.Errorf("ollama chat: unexpected reply %q", resp)
 	}
-	if lemma == "" || strings.EqualFold(lemma, translation) {
-		return translation, nil
+	if l == "" || strings.EqualFold(l, translation) {
+		return translation, "", nil
 	}
-	return fmt.Sprintf("%s (%s)", translation, lemma), nil
+	return translation, l, nil
 }
 
 // parseReply extracts translation and lemma from a reply formatted as

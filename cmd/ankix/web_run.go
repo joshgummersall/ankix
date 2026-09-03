@@ -6,8 +6,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/joshgummersall/ankix/internal/anki"
+	"github.com/joshgummersall/ankix/internal/dict"
 	"github.com/joshgummersall/ankix/internal/dict/ollama"
-	"github.com/joshgummersall/ankix/internal/translate"
 	"github.com/joshgummersall/ankix/internal/tui"
 	"github.com/joshgummersall/ankix/internal/web"
 )
@@ -29,9 +29,9 @@ func runWebFetch(f *webFlags, url string) error {
 }
 
 func launchWebTUI(f *webFlags, doc *tui.Document, title, url string) error {
-	var translator translate.Provider
+	var provider dict.Provider
 	if !noGloss {
-		translator = glossProvider{ollama.New(ollamaURL, ollamaModel)}
+		provider = ollama.New(ollamaURL, ollamaModel)
 	}
 
 	client := anki.New(ankiConnectURL)
@@ -53,7 +53,7 @@ func launchWebTUI(f *webFlags, doc *tui.Document, title, url string) error {
 		Title:      title,
 		Deck:       deck,
 		AnkiClient: client,
-		Translator: translator,
+		Dict:       provider,
 		BuildNote: func(lineIndex int, sentence string, sel anki.WordSelection) anki.Note {
 			return anki.BuildNote(cardTemplates, deck, title, url, "Web", sentence, sel)
 		},
