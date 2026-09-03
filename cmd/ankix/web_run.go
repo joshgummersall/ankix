@@ -55,7 +55,7 @@ func launchWebTUI(f *webFlags, doc *tui.Document, title, url string) error {
 		AnkiClient: client,
 		Translator: translator,
 		BuildNote: func(lineIndex int, sentence string, sel anki.WordSelection) anki.Note {
-			return anki.BuildNote(deck, title, url, "Web", sentence, sel)
+			return anki.BuildNote(cardTemplates, deck, title, url, "Web", sentence, sel)
 		},
 		PreviewLink: func(lineIndex int) string {
 			return url

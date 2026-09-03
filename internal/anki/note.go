@@ -3,7 +3,6 @@ package anki
 import (
 	"fmt"
 	"regexp"
-	"strings"
 	"time"
 )
 
@@ -16,34 +15,35 @@ type WordSelection struct {
 }
 
 // BuildYouTubeNote constructs a Basic (Front/Back) note for a single marked
-// word or phrase within sentence. Front is a bolded headword followed by
-// the sentence with that word italicized — the headword is what
-// lets the same sentence generate several distinct cards (one per marked
-// word) without Anki's duplicate check (which compares the first field)
-// treating them as the same note. Back is the English gloss plus a link
-// to roughly where the word is spoken in the source video.
-func BuildYouTubeNote(deck, videoTitle, videoID string, cueStart time.Duration, sentence string, sel WordSelection) Note {
-	word := sentence[sel.Start:sel.End]
-
-	front := "<b>" + word + "</b><br><br>" +
-		sentence[:sel.Start] + "<i>" + word + "</i>" + sentence[sel.End:]
-
-	var back strings.Builder
-	if sel.Gloss != "" {
-		back.WriteString(sel.Gloss)
-		back.WriteString("<br><br>")
+// word or phrase within sentence, rendered through tmpl (nil uses the
+// built-in default templates). The headword that starts Front is what lets
+// the same sentence generate several distinct cards (one per marked word)
+// without Anki's duplicate check (which compares the first field) treating
+// them as the same note. Back is the English gloss plus a link to roughly
+// where the word is spoken in the source video.
+func BuildYouTubeNote(tmpl *Templates, deck, videoTitle, videoID string, cueStart time.Duration, sentence string, sel WordSelection) Note {
+	timestamp := formatTimestamp(cueStart)
+	link := VideoLink(videoID, cueStart)
+	data := CardData{
+		Word:        sentence[sel.Start:sel.End],
+		Before:      sentence[:sel.Start],
+		After:       sentence[sel.End:],
+		Highlighted: true,
+		Definition:  sel.Gloss,
+		Source:      videoTitle,
+		Timestamp:   timestamp,
+		Link:        link,
+		LinkLabel:   "watch",
+		Attribution: formatAttribution(videoTitle, timestamp, link, "watch"),
 	}
-	fmt.Fprintf(&back, "%s (%s)", videoTitle, formatTimestamp(cueStart))
-	if link := VideoLink(videoID, cueStart); link != "" {
-		fmt.Fprintf(&back, ` — <a href="%s">watch</a>`, link)
-	}
+	front, back := tmpl.Render(data)
 
 	return Note{
 		DeckName:  deck,
 		ModelName: "Basic",
 		Fields: map[string]string{
 			"Front": front,
-			"Back":  back.String(),
+			"Back":  back,
 		},
 		Tags: []string{SourceTag("YouTube"), "AnkiX::Video::" + videoID},
 		Options: &NoteOptions{
@@ -56,28 +56,26 @@ func BuildYouTubeNote(deck, videoTitle, videoID string, cueStart time.Duration, 
 // BuildNote is BuildYouTubeNote's counterpart for sources with no time
 // axis (web articles, local files): no timestamp or deep link, just a
 // title and an optional plain link to the source.
-func BuildNote(deck, title, url, sourceTag, sentence string, sel WordSelection) Note {
-	word := sentence[sel.Start:sel.End]
-
-	front := "<b>" + word + "</b><br><br>" +
-		sentence[:sel.Start] + "<i>" + word + "</i>" + sentence[sel.End:]
-
-	var back strings.Builder
-	if sel.Gloss != "" {
-		back.WriteString(sel.Gloss)
-		back.WriteString("<br><br>")
+func BuildNote(tmpl *Templates, deck, title, url, sourceTag, sentence string, sel WordSelection) Note {
+	data := CardData{
+		Word:        sentence[sel.Start:sel.End],
+		Before:      sentence[:sel.Start],
+		After:       sentence[sel.End:],
+		Highlighted: true,
+		Definition:  sel.Gloss,
+		Source:      title,
+		Link:        url,
+		LinkLabel:   "read",
+		Attribution: formatAttribution(title, "", url, "read"),
 	}
-	back.WriteString(title)
-	if url != "" {
-		fmt.Fprintf(&back, ` — <a href="%s">read</a>`, url)
-	}
+	front, back := tmpl.Render(data)
 
 	return Note{
 		DeckName:  deck,
 		ModelName: "Basic",
 		Fields: map[string]string{
 			"Front": front,
-			"Back":  back.String(),
+			"Back":  back,
 		},
 		Tags: []string{SourceTag(sourceTag)},
 		Options: &NoteOptions{
@@ -89,28 +87,29 @@ func BuildNote(deck, title, url, sourceTag, sentence string, sel WordSelection) 
 
 // BuildPodcastNote is BuildYouTubeNote's counterpart for a podcast episode:
 // Back links to the episode audio at roughly cueStart instead of a video.
-func BuildPodcastNote(deck, episodeTitle, audioURL string, cueStart time.Duration, sentence string, sel WordSelection) Note {
-	word := sentence[sel.Start:sel.End]
-
-	front := "<b>" + word + "</b><br><br>" +
-		sentence[:sel.Start] + "<i>" + word + "</i>" + sentence[sel.End:]
-
-	var back strings.Builder
-	if sel.Gloss != "" {
-		back.WriteString(sel.Gloss)
-		back.WriteString("<br><br>")
+func BuildPodcastNote(tmpl *Templates, deck, episodeTitle, audioURL string, cueStart time.Duration, sentence string, sel WordSelection) Note {
+	timestamp := formatTimestamp(cueStart)
+	link := AudioLink(audioURL, cueStart)
+	data := CardData{
+		Word:        sentence[sel.Start:sel.End],
+		Before:      sentence[:sel.Start],
+		After:       sentence[sel.End:],
+		Highlighted: true,
+		Definition:  sel.Gloss,
+		Source:      episodeTitle,
+		Timestamp:   timestamp,
+		Link:        link,
+		LinkLabel:   "listen",
+		Attribution: formatAttribution(episodeTitle, timestamp, link, "listen"),
 	}
-	fmt.Fprintf(&back, "%s (%s)", episodeTitle, formatTimestamp(cueStart))
-	if link := AudioLink(audioURL, cueStart); link != "" {
-		fmt.Fprintf(&back, ` — <a href="%s">listen</a>`, link)
-	}
+	front, back := tmpl.Render(data)
 
 	return Note{
 		DeckName:  deck,
 		ModelName: "Basic",
 		Fields: map[string]string{
 			"Front": front,
-			"Back":  back.String(),
+			"Back":  back,
 		},
 		Tags: []string{SourceTag("Podcast")},
 		Options: &NoteOptions{

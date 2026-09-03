@@ -33,7 +33,8 @@ type KindleConfig struct {
 	Deck       string
 	Tags       []string
 	AnkiClient *anki.Client
-	Dict       dict.Provider // nil disables definition lookups
+	Dict       dict.Provider   // nil disables definition lookups
+	Templates  *anki.Templates // nil uses the built-in default card templates
 
 	// DB, if non-nil, is a read-write vocab.db handle used to mark synced
 	// words as Mastered.
@@ -546,7 +547,7 @@ func kindleBatchSubmitCmd(cfg KindleConfig, sentence string, sels []kindleSelect
 			if sel.definition != "" {
 				back = kindle.FormatDefinition(phrase, sel.definition)
 			}
-			note := kindle.BuildNote(cfg.Deck, cfg.Tags, sel.entries[0], sentence, sel.start, sel.end, back)
+			note := kindle.BuildNote(cfg.Templates, cfg.Deck, cfg.Tags, sel.entries[0], sentence, sel.start, sel.end, back)
 
 			_, err := cfg.AnkiClient.AddNote(note)
 			duplicate := errors.Is(err, anki.ErrDuplicate)

@@ -135,7 +135,7 @@ func runSync(o *syncOptions) error {
 		}
 
 		start, end := kindle.FindPhrase(e.Usage, e.Word)
-		note := kindle.BuildNote(deck, o.tags, e, e.Usage, start, end, kindle.FormatDefinition(e.Word, definition))
+		note := kindle.BuildNote(cardTemplates, deck, o.tags, e, e.Usage, start, end, kindle.FormatDefinition(e.Word, definition))
 
 		if o.dryRun {
 			fmt.Printf("would add %q\n  front: %s\n  back:  %s\n", e.Word, note.Fields["Front"], note.Fields["Back"])
@@ -202,6 +202,7 @@ func runKindleReview(o *syncOptions, db *sql.DB, client *anki.Client, provider *
 		AnkiClient: client,
 		Dict:       provider,
 		DB:         db,
+		Templates:  cardTemplates,
 	})
 
 	p := tea.NewProgram(m, tea.WithAltScreen())

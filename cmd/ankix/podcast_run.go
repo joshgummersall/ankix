@@ -85,7 +85,7 @@ func launchPodcastTUI(cues []subtitle.Cue, title, audioURL string) error {
 		AnkiClient: client,
 		Translator: translator,
 		BuildNote: func(lineIndex int, sentence string, sel anki.WordSelection) anki.Note {
-			return anki.BuildPodcastNote(deck, title, audioURL, cues[lineIndex].Start, sentence, sel)
+			return anki.BuildPodcastNote(cardTemplates, deck, title, audioURL, cues[lineIndex].Start, sentence, sel)
 		},
 		PreviewLink: func(lineIndex int) string {
 			return anki.AudioLink(audioURL, cues[lineIndex].Start)
