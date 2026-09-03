@@ -133,9 +133,10 @@ Flags:
 
 - `--lang` — language prefix to filter words by, e.g. `en`, `es` (default `en`)
 - `--deck` — Anki deck to sync into (default `Kindle Vocab`)
-- `--model` — Ollama model used to define words (default `ankix`)
 - `--tag` — tags applied to new notes (default `AnkiX::Source::Kindle`)
-- `--dry-run` — preview without writing to Anki
+- `--limit` — only the N most recently looked-up words (0 for no limit)
+- `--headless` — sync straight through, skipping the interactive review
+- `--dry-run` — preview without writing to Anki (only with `--headless`)
 - `--eject` — eject the Kindle's volume after a successful sync (macOS only)
 - `--ankiconnect-url` — AnkiConnect endpoint (default `http://localhost:8765`)
 
@@ -187,7 +188,7 @@ Flags (persistent across both subcommands):
 - `--deck` — Anki deck name (default `AnkiX`)
 - `--ankiconnect-url` — AnkiConnect URL (default `http://localhost:8765`)
 - `--ollama-url` — Ollama URL (default `http://localhost:11434`)
-- `--ollama-model` — Ollama gloss model name (default `ankix`)
+- `--ollama-model` — Ollama gloss model name (default `ankix`; see [Keeping the model in sync](#keeping-the-model-in-sync))
 - `--sub-lang` — subtitle language code (default `es`)
 - `--cache-dir` — subtitle cache directory
 - `--no-gloss` — skip Ollama gloss lookups
@@ -207,7 +208,7 @@ Flags:
 - `--deck` — Anki deck name (default `AnkiX`)
 - `--ankiconnect-url` — AnkiConnect URL (default `http://localhost:8765`)
 - `--ollama-url` — Ollama URL (default `http://localhost:11434`)
-- `--ollama-model` — Ollama gloss model name (default `ankix`)
+- `--ollama-model` — Ollama gloss model name (default `ankix`; see [Keeping the model in sync](#keeping-the-model-in-sync))
 - `--no-gloss` — skip Ollama gloss lookups
 
 ## Fixing a translation
@@ -280,9 +281,10 @@ build on is your choice and doesn't change the name (`ollama show` will tell
 you which one a build used). Keep that choice in the config file's
 `base_model`, though: a rebuild with no config reverts to the default.
 
-`ollama_model` names the model in one place, for both sides — `ankix
-install` builds it and every other command looks it up — so the two can't
-drift apart.
+`ollama_model` (and its `--ollama-model` flag) names the model in one place
+for both sides — `ankix install` builds it and every other command looks it
+up. There's deliberately no separate flag for the name to install under: a
+second way to say it would just be a second way to disagree.
 
 To point `ankix` at a model you built yourself, give `--ollama-model` an
 explicit tag (`--ollama-model myfork:v1`). A name with a `:` in it is used
@@ -302,7 +304,8 @@ place) with a system prompt and examples for that language, then either:
 
 - set `ollama_model = "<name>"` in your config file and run `ankix install`
   — it builds `<name>:<checksum>` and every command looks that up, with
-  nothing to pass per invocation (`--model` overrides it for one run), or
+  nothing to pass per invocation (`--ollama-model` overrides it for one
+  run), or
 - build it by hand (`mise run create`, or `ollama create <name>:<tag> -f
   Modelfile`) and pass the full `--ollama-model <name>:<tag>`, which `ankix`
   uses verbatim, or

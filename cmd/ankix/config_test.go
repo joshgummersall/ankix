@@ -145,23 +145,14 @@ func TestInstallCmd_BaseModelFallsBackToTheDefaultBaseModel(t *testing.T) {
 	}
 }
 
-// install builds the model every other command then looks up, so the two
-// have to read the same config key — otherwise setting ollama_model builds
-// one name and searches for another.
-func TestInstallCmd_ModelNameMatchesTheNameCommandsLookUp(t *testing.T) {
-	cfg := config{OllamaModel: "ankix-es"}
-
-	installName := newInstallCmd(cfg).Flag("model").DefValue
-	lookupName := strOr(cfg.OllamaModel, "ankix")
-
-	if installName != lookupName {
-		t.Errorf("install builds %q but commands look up %q", installName, lookupName)
-	}
-}
-
-func TestInstallCmd_ModelNameFallsBackToAnkix(t *testing.T) {
-	if got := newInstallCmd(config{}).Flag("model").DefValue; got != "ankix" {
-		t.Errorf("--model default = %q, want %q", got, "ankix")
+// install builds the model every other command then looks up, so there is
+// deliberately only one way to name it: the global --ollama-model. An
+// install-only flag would be a second source of truth, and setting
+// ollama_model would build one name while every command searched for
+// another.
+func TestInstallCmd_HasNoModelNameFlagOfItsOwn(t *testing.T) {
+	if f := newInstallCmd(config{}).Flags().Lookup("model"); f != nil {
+		t.Error("install defines its own --model flag; the name it builds must come from the global --ollama-model")
 	}
 }
 

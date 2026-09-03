@@ -12,20 +12,21 @@ import (
 )
 
 func newInstallCmd(cfg config) *cobra.Command {
-	var model, baseModel string
+	var baseModel string
 
 	cmd := &cobra.Command{
 		Use:   "install",
 		Short: "Build the local Ollama model ankix uses for definitions",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return installModel(model, baseModel)
+			// Deliberately the global --ollama-model rather than an
+			// install-only flag: the name install builds and the name
+			// every other command looks up are one thing, and two ways to
+			// say it is two ways to disagree.
+			return installModel(ollamaModel, baseModel)
 		},
 	}
-	// Both default from the same config keys the other commands read:
-	// `ollama_model` names the model every command looks up, so building
-	// something else would leave nothing to find, and `base_model` has to
-	// survive the rebuild each upgrade asks for.
-	cmd.Flags().StringVar(&model, "model", strOr(cfg.OllamaModel, "ankix"), "name to give the Ollama model (config: ollama_model)")
+	// base_model has to survive the rebuild each upgrade asks for, so it
+	// defaults from the config file like everything else.
 	cmd.Flags().StringVar(&baseModel, "base-model", strOr(cfg.BaseModel, vocab.DefaultBaseModel), "Ollama model to build the gloss model FROM; must already be pulled, e.g. via ollama pull (config: base_model)")
 
 	return cmd

@@ -70,7 +70,7 @@ func main() {
 	root.PersistentFlags().StringVar(&deck, "deck", strOr(cfg.Deck, "AnkiX"), "Anki deck name")
 	root.PersistentFlags().StringVar(&ankiConnectURL, "ankiconnect-url", strOr(cfg.AnkiConnectURL, "http://localhost:8765"), "AnkiConnect URL")
 	root.PersistentFlags().StringVar(&ollamaURL, "ollama-url", strOr(cfg.OllamaURL, "http://localhost:11434"), "Ollama URL")
-	root.PersistentFlags().StringVar(&ollamaModel, "ollama-model", strOr(cfg.OllamaModel, "ankix"), "Ollama gloss model; a bare name is pinned to the Modelfile checksum ankix install built (e.g. ankix:"+vocab.Checksum()+"), a name with an explicit :tag is used as-is")
+	root.PersistentFlags().StringVar(&ollamaModel, "ollama-model", strOr(cfg.OllamaModel, "ankix"), "Ollama gloss model -- both the name ankix install builds and the one every other command looks up; a bare name is pinned to this build's Modelfile checksum (e.g. ankix:"+vocab.Checksum()+"), a name with an explicit :tag is used as-is")
 	root.PersistentFlags().BoolVar(&noGloss, "no-gloss", cfg.NoGloss, "skip Ollama gloss lookups")
 
 	root.AddCommand(newInstallCmd(cfg))
