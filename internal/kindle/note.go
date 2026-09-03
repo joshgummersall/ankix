@@ -30,13 +30,13 @@ func FindPhrase(sentence, phrase string) (start, end int) {
 // already be formatted (see FormatDefinition).
 func BuildNote(deck string, tags []string, e Entry, sentence string, start, end int, definition string) anki.Note {
 	phrase := e.Word
-	front := "<h1>" + phrase + "</h1>"
+	front := "<b>" + phrase + "</b>"
 	switch {
 	case start >= 0:
 		phrase = sentence[start:end]
-		front = "<h1>" + phrase + "</h1>" + sentence[:start] + "<b><i>" + phrase + "</i></b>" + sentence[end:]
+		front = "<b>" + phrase + "</b><br><br>" + sentence[:start] + "<i>" + phrase + "</i>" + sentence[end:]
 	case sentence != "":
-		front += sentence
+		front += "<br><br>" + sentence
 	}
 
 	return anki.Note{

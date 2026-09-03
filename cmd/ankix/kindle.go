@@ -163,7 +163,7 @@ func runSync(o *syncOptions) error {
 }
 
 func noteExists(client *anki.Client, deck, phrase string) (bool, error) {
-	query := fmt.Sprintf(`deck:%q Front:%q`, deck, "<h1>"+phrase+"</h1>*")
+	query := fmt.Sprintf(`deck:%q Front:%q`, deck, "<b>"+phrase+"</b>*")
 	ids, err := client.FindNotes(query)
 	if err != nil {
 		return false, err
