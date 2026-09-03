@@ -1,7 +1,9 @@
 package tui
 
 import (
+	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -83,6 +85,12 @@ type phrase[T any] struct {
 	previewLemma   string
 	previewErr     error
 	previewPending bool
+}
+
+// included reports whether p will produce a card: standalone (not absorbed
+// into another phrase by a merge) and not deleted.
+func (p phrase[T]) included() bool {
+	return p.mergedInto == -1 && !p.deleted
 }
 
 // phraseSet is the phrase-selection engine shared by the YouTube and Kindle
@@ -389,19 +397,55 @@ func (ps *phraseSet[T]) deleteNearestPhrase() {
 	ps.phrases[i].previewPending = false
 }
 
-// refreshPreviews kicks off a lookup for every non-deleted, standalone
-// phrase whose current text hasn't been looked up yet (or has changed since
-// it last was, e.g. after an expansion or merge), so a preview of what will
-// be saved is visible before submitting. text extracts a phrase's current
-// sentence text from its lo/hi range; lookup issues the actual command.
-func (ps *phraseSet[T]) refreshPreviews(text func(p *phrase[T]) string, lookup func(i int, text string) tea.Cmd) tea.Cmd {
+// phraseBounds returns the byte offsets in the sentence spanned by p's
+// current lo/hi word range.
+func (ps *phraseSet[T]) phraseBounds(p phrase[T]) (int, int) {
+	return ps.tokens[ps.wordTokens[p.lo]].start, ps.tokens[ps.wordTokens[p.hi]].end
+}
+
+// phraseText returns p's current text within sentence, which must be the
+// sentence the phrase set was tokenized from.
+func (ps *phraseSet[T]) phraseText(sentence string, p phrase[T]) string {
+	start, end := ps.phraseBounds(p)
+	return sentence[start:end]
+}
+
+// countIncluded counts the phrases that will become cards.
+func (ps *phraseSet[T]) countIncluded() int {
+	n := 0
+	for _, p := range ps.phrases {
+		if p.included() {
+			n++
+		}
+	}
+	return n
+}
+
+// previewsPending reports whether any included phrase is still waiting on
+// its lookup, so submitting can wait for a complete preview rather than
+// saving a card with a half-fetched back.
+func (ps *phraseSet[T]) previewsPending() bool {
+	for _, p := range ps.phrases {
+		if p.included() && p.previewPending {
+			return true
+		}
+	}
+	return false
+}
+
+// refreshPreviews kicks off a lookup for every included phrase whose
+// current text hasn't been looked up yet (or has changed since it last was,
+// e.g. after an expansion or merge), so a preview of what will be saved is
+// visible before submitting. lookup issues the caller's actual lookup
+// command (gloss vs definition) for the phrase at i.
+func (ps *phraseSet[T]) refreshPreviews(sentence string, lookup func(i int, text string) tea.Cmd) tea.Cmd {
 	var cmds []tea.Cmd
 	for i := range ps.phrases {
 		p := &ps.phrases[i]
-		if p.mergedInto != -1 || p.deleted {
+		if !p.included() {
 			continue
 		}
-		t := text(p)
+		t := ps.phraseText(sentence, *p)
 		if p.previewText == t {
 			continue
 		}
@@ -413,6 +457,21 @@ func (ps *phraseSet[T]) refreshPreviews(text func(p *phrase[T]) string, lookup f
 		cmds = append(cmds, lookup(i, t))
 	}
 	return tea.Batch(cmds...)
+}
+
+// applyPreview records a finished lookup against phrases[idx]. text is the
+// phrase text the lookup was issued for; a result whose text no longer
+// matches the phrase is stale (the phrase changed while it was in flight)
+// and is dropped.
+func (ps *phraseSet[T]) applyPreview(idx int, text, preview, lemma string, err error) {
+	if idx < 0 || idx >= len(ps.phrases) || ps.phrases[idx].previewText != text {
+		return
+	}
+	p := &ps.phrases[idx]
+	p.previewPending = false
+	p.preview = preview
+	p.previewLemma = lemma
+	p.previewErr = err
 }
 
 // debounceExpandMsg fires expandDebounce after an expand-mode edit; gen ties
@@ -478,6 +537,70 @@ func (ps *phraseSet[T]) render(sentence string) string {
 			}
 		}
 		b.WriteString(text)
+	}
+	return b.String()
+}
+
+// expandAction is what an expand-mode keypress amounted to, letting the
+// caller apply its own state change and status text for each outcome
+// without duplicating the key handling itself.
+type expandAction int
+
+const (
+	expandIgnored   expandAction = iota // not an expand-mode key; nothing happened
+	expandMoved                         // the selection grew or shrank
+	expandConfirmed                     // the selection was accepted
+	expandCanceled                      // the selection was reverted
+)
+
+// handleExpandKey applies an expand-mode keypress to the phrase being
+// expanded and reports what it did. The returned command is non-nil only
+// for expandMoved (a debounced preview refresh); the caller supplies its
+// own refresh after confirming or canceling, since both end expand mode.
+func (ps *phraseSet[T]) handleExpandKey(msg tea.KeyMsg) (expandAction, tea.Cmd) {
+	switch msg.String() {
+	case "l", "right":
+		ps.moveExpandCursor(1)
+		return expandMoved, ps.debounceRefresh()
+	case "h", "left":
+		ps.moveExpandCursor(-1)
+		return expandMoved, ps.debounceRefresh()
+	case "enter":
+		return expandConfirmed, nil
+	case "esc":
+		ps.cancelExpand()
+		return expandCanceled, nil
+	}
+	return expandIgnored, nil
+}
+
+// renderPreviews lists every included phrase in sentence order alongside
+// the preview fetched for it — the "what will be saved" summary shown under
+// the sentence. Each line ends in a newline; the result is empty when
+// nothing is selected.
+func (ps *phraseSet[T]) renderPreviews(sentence string) string {
+	ordered := make([]phrase[T], len(ps.phrases))
+	copy(ordered, ps.phrases)
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].lo < ordered[j].lo })
+
+	var b strings.Builder
+	for _, p := range ordered {
+		if !p.included() {
+			continue
+		}
+		text := ps.phraseText(sentence, p)
+		switch {
+		case p.previewPending:
+			fmt.Fprintf(&b, "%s: looking up...\n", text)
+		case p.previewErr != nil:
+			fmt.Fprintf(&b, "%s: lookup failed (%v)\n", text, p.previewErr)
+		case p.preview == "":
+			fmt.Fprintf(&b, "%s: (none)\n", text)
+		case p.previewLemma != "":
+			fmt.Fprintf(&b, "%s: %s (%s)\n", text, p.preview, p.previewLemma)
+		default:
+			fmt.Fprintf(&b, "%s: %s\n", text, p.preview)
+		}
 	}
 	return b.String()
 }

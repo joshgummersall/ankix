@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textarea"
@@ -134,21 +133,16 @@ func (m *KindleModel) resetPhrasesForSentence() {
 	}
 }
 
-// refreshDefinitions kicks off a definition lookup for every non-deleted,
-// standalone phrase whose current text hasn't been looked up yet (or has
-// changed since it last was, e.g. after an expansion or merge), so a
-// preview of what will be saved is visible before submitting.
+// refreshDefinitions kicks off a definition lookup for every phrase whose
+// text is not previewed yet, so what will be saved is visible before
+// submitting.
 func (m *KindleModel) refreshDefinitions() tea.Cmd {
 	if m.cfg.Dict == nil {
 		return nil
 	}
-	text := func(p *phrase[kindle.Entry]) string {
-		return m.sentence[m.ps.tokens[m.ps.wordTokens[p.lo]].start:m.ps.tokens[m.ps.wordTokens[p.hi]].end]
-	}
-	lookup := func(i int, text string) tea.Cmd {
+	return m.ps.refreshPreviews(m.sentence, func(i int, text string) tea.Cmd {
 		return kindleDefCmd(m.cfg.Dict, text, m.sentence, i, text)
-	}
-	return m.ps.refreshPreviews(text, lookup)
+	})
 }
 
 // loadGroup positions the model at groups[groupIdx], or finishes review
@@ -168,12 +162,7 @@ func (m *KindleModel) loadGroup(groupIdx int) tea.Cmd {
 }
 
 func (m *KindleModel) pickingStatus() string {
-	cards := 0
-	for _, p := range m.ps.phrases {
-		if p.mergedInto == -1 && !p.deleted {
-			cards++
-		}
-	}
+	cards := m.ps.countIncluded()
 	word := "card"
 	if cards != 1 {
 		word = "cards"
@@ -236,12 +225,7 @@ func (m KindleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.refreshDefinitions()
 
 	case kindleDefResultMsg:
-		if msg.idx < len(m.ps.phrases) && m.ps.phrases[msg.idx].previewText == msg.text {
-			m.ps.phrases[msg.idx].previewPending = false
-			m.ps.phrases[msg.idx].preview = msg.definition
-			m.ps.phrases[msg.idx].previewLemma = msg.lemma
-			m.ps.phrases[msg.idx].previewErr = msg.err
-		}
+		m.ps.applyPreview(msg.idx, msg.text, msg.definition, msg.lemma, msg.err)
 		return m, nil
 
 	case kindleBatchSubmitResultMsg:
@@ -316,19 +300,10 @@ func (m KindleModel) handlePickingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // handleExpandingKey moves the cursor within phrases[m.ps.expandIdx] and
 // merges it with any other phrase it comes to overlap.
 func (m KindleModel) handleExpandingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "l", "right":
-		m.ps.moveExpandCursor(1)
-		return m, m.ps.debounceRefresh()
-	case "h", "left":
-		m.ps.moveExpandCursor(-1)
-		return m, m.ps.debounceRefresh()
-	case "esc":
-		m.ps.cancelExpand()
-		m.state = kPicking
-		m.setStatus(m.pickingStatus(), false)
-		return m, m.refreshDefinitions()
-	case "enter":
+	switch action, cmd := m.ps.handleExpandKey(msg); action {
+	case expandMoved:
+		return m, cmd
+	case expandConfirmed, expandCanceled:
 		m.state = kPicking
 		m.setStatus(m.pickingStatus(), false)
 		return m, m.refreshDefinitions()
@@ -341,11 +316,9 @@ func (m KindleModel) handleExpandingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // every entry they absorbed to whichever single card their merged range
 // produces.
 func (m KindleModel) submitGroup() (tea.Model, tea.Cmd) {
-	for _, p := range m.ps.phrases {
-		if p.mergedInto == -1 && !p.deleted && p.previewPending {
-			m.setStatus("still looking up definitions...", false)
-			return m, nil
-		}
+	if m.ps.previewsPending() {
+		m.setStatus("still looking up definitions...", false)
+		return m, nil
 	}
 
 	var sels []kindleSelection
@@ -364,8 +337,7 @@ func (m KindleModel) submitGroup() (tea.Model, tea.Cmd) {
 			skipped = append(skipped, entries...)
 			continue
 		}
-		start := m.ps.tokens[m.ps.wordTokens[p.lo]].start
-		end := m.ps.tokens[m.ps.wordTokens[p.hi]].end
+		start, end := m.ps.phraseBounds(p)
 		sels = append(sels, kindleSelection{entries: entries, start: start, end: end, definition: p.preview, lemma: p.previewLemma})
 	}
 
@@ -461,27 +433,7 @@ func (m KindleModel) renderKindlePicker() string {
 
 	if m.cfg.Dict != nil {
 		b.WriteString("\n\n")
-		ordered := make([]phrase[kindle.Entry], len(m.ps.phrases))
-		copy(ordered, m.ps.phrases)
-		sort.Slice(ordered, func(i, j int) bool { return ordered[i].lo < ordered[j].lo })
-		for _, p := range ordered {
-			if p.mergedInto != -1 || p.deleted {
-				continue
-			}
-			text := m.sentence[m.ps.tokens[m.ps.wordTokens[p.lo]].start:m.ps.tokens[m.ps.wordTokens[p.hi]].end]
-			switch {
-			case p.previewPending:
-				fmt.Fprintf(&b, "%s: looking up...\n", text)
-			case p.previewErr != nil:
-				fmt.Fprintf(&b, "%s: lookup failed (%v)\n", text, p.previewErr)
-			case p.preview == "":
-				fmt.Fprintf(&b, "%s: (none)\n", text)
-			case p.previewLemma != "":
-				fmt.Fprintf(&b, "%s: %s (%s)\n", text, p.preview, p.previewLemma)
-			default:
-				fmt.Fprintf(&b, "%s: %s\n", text, p.preview)
-			}
-		}
+		b.WriteString(m.ps.renderPreviews(m.sentence))
 	}
 
 	return "\n" + b.String() + "\n"
