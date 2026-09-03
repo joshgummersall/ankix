@@ -25,26 +25,30 @@ func FindPhrase(sentence, phrase string) (start, end int) {
 }
 
 // BuildNote constructs a Basic (Front/Back) note for a headword or phrase
-// within sentence. If start is negative, no byte range was found/chosen and
-// the sentence (if any) is appended unbolded. definition is expected to
-// already be formatted (see FormatDefinition).
-func BuildNote(deck string, tags []string, e Entry, sentence string, start, end int, definition string) anki.Note {
-	phrase := e.Word
-	front := "<b>" + phrase + "</b>"
-	switch {
-	case start >= 0:
-		phrase = sentence[start:end]
-		front = "<b>" + phrase + "</b><br><br>" + sentence[:start] + "<i>" + phrase + "</i>" + sentence[end:]
-	case sentence != "":
-		front += "<br><br>" + sentence
+// within sentence, rendered through tmpl (nil uses the built-in default
+// templates). If start is negative, no byte range was found/chosen and the
+// sentence (if any) is shown without a marked word. definition is expected
+// to already be formatted (see FormatDefinition).
+func BuildNote(tmpl *anki.Templates, deck string, tags []string, e Entry, sentence string, start, end int, definition string) anki.Note {
+	data := anki.CardData{
+		Word:       e.Word,
+		After:      sentence,
+		Definition: definition,
 	}
+	if start >= 0 {
+		data.Word = sentence[start:end]
+		data.Before = sentence[:start]
+		data.After = sentence[end:]
+		data.Highlighted = true
+	}
+	front, back := tmpl.Render(data)
 
 	return anki.Note{
 		DeckName:  deck,
 		ModelName: ankiModelName,
 		Fields: map[string]string{
 			"Front": front,
-			"Back":  definition,
+			"Back":  back,
 		},
 		Tags: tags,
 		Options: &anki.NoteOptions{

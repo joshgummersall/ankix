@@ -97,7 +97,7 @@ func launchYouTubeTUI(f *youtubeFlags, transcript *subtitle.Transcript, title st
 		AnkiClient: client,
 		Translator: translator,
 		BuildNote: func(lineIndex int, sentence string, sel anki.WordSelection) anki.Note {
-			return anki.BuildYouTubeNote(deck, title, videoID, cues[lineIndex].Start, sentence, sel)
+			return anki.BuildYouTubeNote(cardTemplates, deck, title, videoID, cues[lineIndex].Start, sentence, sel)
 		},
 		PreviewLink: func(lineIndex int) string {
 			return anki.VideoLink(videoID, cues[lineIndex].Start)

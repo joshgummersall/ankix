@@ -43,6 +43,66 @@ This only swaps the base model the same prompt and few-shot examples run
 on — see [Using a different language](#using-a-different-language) below if
 you want to change the prompt itself.
 
+## Configuration
+
+Flag defaults can be set once in a config file instead of passed on every
+invocation. `ankix` looks for it at `$XDG_CONFIG_HOME/ankix/config.toml` (or
+`~/.config/ankix/config.toml` if that variable isn't set), then falls back
+to the OS-specific default from Go's `os.UserConfigDir()` (e.g.
+`~/Library/Application Support/ankix/config.toml` on macOS) if nothing's
+found at the first location. A missing file is fine — every setting just
+keeps its built-in default.
+
+```toml
+deck = "AnkiX"
+ankiconnect_url = "http://localhost:8765"
+ollama_url = "http://localhost:11434"
+ollama_model = "ankix"
+no_gloss = false
+lang = "es"          # seeds --lang (kindle) and --sub-lang (youtube)
+
+[kindle]
+lang = "es"           # overrides the top-level lang for kindle only
+
+[youtube]
+sub_lang = "es"        # overrides the top-level lang for youtube only
+cache_dir = "/path/to/subtitle/cache"
+
+[card]
+front = """
+<b>{{.Word}}</b><br><br>{{.Before}}<i>{{.Word}}</i>{{.After}}
+"""
+back = """
+{{.Definition}}{{if and .Definition .Attribution}}<br><br>{{end}}{{.Attribution}}
+"""
+```
+
+### Custom card formatting
+
+`[card].front` and `[card].back` are [Go templates](https://pkg.go.dev/text/template)
+that render every note's `Front`/`Back` fields; leaving either unset keeps
+the built-in formatting shown above. TOML's multiline `"""..."""` strings
+are the natural way to write them — a leading/trailing newline from that
+syntax is trimmed automatically. The data available to both templates
+(`internal/anki.CardData`):
+
+| Field         | Description                                                                 |
+|---------------|------------------------------------------------------------------------------|
+| `Word`        | the marked headword/phrase                                                  |
+| `Before`      | sentence text before `Word` (valid only if `Highlighted`)                   |
+| `After`       | sentence text after `Word` if `Highlighted`, else the whole (unmarked) sentence |
+| `Highlighted` | whether `Before`/`Word`/`After` is an actual split of a sentence            |
+| `Definition`  | formatted definition or gloss (HTML), `""` if none                          |
+| `Source`      | video/episode/page title, `""` for Kindle                                   |
+| `Timestamp`   | e.g. `"3:41"`, `""` if not applicable                                       |
+| `Link`        | deep link URL, `""` if none                                                 |
+| `LinkLabel`   | `"watch"` / `"listen"` / `"read"`, `""` if `Link` is `""`                   |
+| `Attribution` | `Source`, `Timestamp` and `Link` pre-combined into one HTML fragment, e.g. `Title (3:41) — <a href="...">watch</a>` |
+
+A template with bad syntax, or one referencing a field that doesn't exist,
+is rejected with an error as soon as `ankix` starts, rather than surfacing
+mid-sync or mid-review.
+
 ## `ankix kindle` — Kindle vocabulary builder
 
 ```

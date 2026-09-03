@@ -8,6 +8,8 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+
+	"github.com/joshgummersall/ankix/internal/anki"
 )
 
 // Shared flags used across subcommands, defined once on the root command so
@@ -18,6 +20,11 @@ var (
 	ollamaURL      string
 	ollamaModel    string
 	noGloss        bool
+
+	// cardTemplates renders every note's Front/Back fields; compiled once
+	// in main() from the config file's [card] section (or the built-in
+	// defaults if unset).
+	cardTemplates *anki.Templates
 )
 
 // strOr returns cfgVal if it's set, otherwise fallback. Used to let a config
@@ -33,6 +40,12 @@ func main() {
 	cfg, err := loadConfig()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error: reading config:", err)
+		os.Exit(1)
+	}
+
+	cardTemplates, err = anki.NewTemplates(cfg.Card.Front, cfg.Card.Back)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error: card template:", err)
 		os.Exit(1)
 	}
 

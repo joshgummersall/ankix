@@ -61,7 +61,7 @@ func launchFileTUI(f *fileFlags, doc *tui.Document, title string) error {
 		AnkiClient: client,
 		Translator: translator,
 		BuildNote: func(lineIndex int, sentence string, sel anki.WordSelection) anki.Note {
-			return anki.BuildNote(deck, title, "", "File", sentence, sel)
+			return anki.BuildNote(cardTemplates, deck, title, "", "File", sentence, sel)
 		},
 	})
 
