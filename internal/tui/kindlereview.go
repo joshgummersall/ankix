@@ -44,12 +44,14 @@ type KindleConfig struct {
 // kindleSelection is one accepted word/phrase, resolved to byte offsets in
 // the sentence, ready to become a card. entries holds every entry the
 // phrase covers — more than one if expanding it merged it with a
-// neighboring word's phrase. definition is whatever was already fetched and
-// previewed for this phrase, reused as-is rather than looked up again.
+// neighboring word's phrase. definition/lemma are whatever was already
+// fetched and previewed for this phrase, reused as-is rather than looked up
+// again.
 type kindleSelection struct {
 	entries    []kindle.Entry
 	start, end int
 	definition string
+	lemma      string
 }
 
 // KindleModel is the root Bubble Tea model for reviewing Kindle vocab
@@ -237,6 +239,7 @@ func (m KindleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.idx < len(m.ps.phrases) && m.ps.phrases[msg.idx].previewText == msg.text {
 			m.ps.phrases[msg.idx].previewPending = false
 			m.ps.phrases[msg.idx].preview = msg.definition
+			m.ps.phrases[msg.idx].previewLemma = msg.lemma
 			m.ps.phrases[msg.idx].previewErr = msg.err
 		}
 		return m, nil
@@ -363,7 +366,7 @@ func (m KindleModel) submitGroup() (tea.Model, tea.Cmd) {
 		}
 		start := m.ps.tokens[m.ps.wordTokens[p.lo]].start
 		end := m.ps.tokens[m.ps.wordTokens[p.hi]].end
-		sels = append(sels, kindleSelection{entries: entries, start: start, end: end, definition: p.preview})
+		sels = append(sels, kindleSelection{entries: entries, start: start, end: end, definition: p.preview, lemma: p.previewLemma})
 	}
 
 	m.state = kSubmitting
@@ -473,6 +476,8 @@ func (m KindleModel) renderKindlePicker() string {
 				fmt.Fprintf(&b, "%s: lookup failed (%v)\n", text, p.previewErr)
 			case p.preview == "":
 				fmt.Fprintf(&b, "%s: (none)\n", text)
+			case p.previewLemma != "":
+				fmt.Fprintf(&b, "%s: %s (%s)\n", text, p.preview, p.previewLemma)
 			default:
 				fmt.Fprintf(&b, "%s: %s\n", text, p.preview)
 			}
@@ -506,13 +511,14 @@ type kindleDefResultMsg struct {
 	idx        int
 	text       string
 	definition string
+	lemma      string
 	err        error
 }
 
 func kindleDefCmd(p dict.Provider, phrase, sentence string, idx int, text string) tea.Cmd {
 	return func() tea.Msg {
-		def, err := p.Define(phrase, sentence)
-		return kindleDefResultMsg{idx: idx, text: text, definition: def, err: err}
+		def, lemma, err := p.Define(phrase, sentence)
+		return kindleDefResultMsg{idx: idx, text: text, definition: def, lemma: lemma, err: err}
 	}
 }
 
@@ -547,7 +553,7 @@ func kindleBatchSubmitCmd(cfg KindleConfig, sentence string, sels []kindleSelect
 			if sel.definition != "" {
 				back = kindle.FormatDefinition(phrase, sel.definition)
 			}
-			note := kindle.BuildNote(cfg.Templates, cfg.Deck, cfg.Tags, sel.entries[0], sentence, sel.start, sel.end, back)
+			note := kindle.BuildNote(cfg.Templates, cfg.Deck, cfg.Tags, sel.entries[0], sentence, sel.start, sel.end, back, sel.lemma)
 
 			_, err := cfg.AnkiClient.AddNote(note)
 			duplicate := errors.Is(err, anki.ErrDuplicate)

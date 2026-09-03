@@ -132,7 +132,7 @@ func runSync(o *syncOptions) (err error) {
 			continue
 		}
 
-		definition, err := provider.Define(e.Word, e.Usage)
+		definition, lemma, err := provider.Define(e.Word, e.Usage)
 		if err != nil {
 			return fmt.Errorf("define %q: %w", e.Word, err)
 		}
@@ -148,7 +148,7 @@ func runSync(o *syncOptions) (err error) {
 		}
 
 		start, end := kindle.FindPhrase(e.Usage, e.Word)
-		note := kindle.BuildNote(cardTemplates, deck, o.tags, e, e.Usage, start, end, kindle.FormatDefinition(e.Word, definition))
+		note := kindle.BuildNote(cardTemplates, deck, o.tags, e, e.Usage, start, end, kindle.FormatDefinition(e.Word, definition), lemma)
 
 		if o.dryRun {
 			fmt.Printf("would add %q\n  front: %s\n  back:  %s\n", e.Word, note.Fields["Front"], note.Fields["Back"])

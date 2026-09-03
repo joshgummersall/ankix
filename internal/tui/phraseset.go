@@ -76,8 +76,11 @@ type phrase[T any] struct {
 	// previewText is the phrase text the preview below applies to — once
 	// lo/hi/text changes, it no longer matches and a fresh lookup is due
 	// (see refreshPreviews).
-	previewText    string
-	preview        string
+	previewText string
+	preview     string
+	// previewLemma is the dictionary/base-form lemma alongside preview, ""
+	// if there is none. Only Kindle's lookup populates it.
+	previewLemma   string
 	previewErr     error
 	previewPending bool
 }
@@ -381,6 +384,7 @@ func (ps *phraseSet[T]) deleteNearestPhrase() {
 	ps.phrases[i].deleted = true
 	ps.phrases[i].previewText = ""
 	ps.phrases[i].preview = ""
+	ps.phrases[i].previewLemma = ""
 	ps.phrases[i].previewErr = nil
 	ps.phrases[i].previewPending = false
 }
@@ -403,6 +407,7 @@ func (ps *phraseSet[T]) refreshPreviews(text func(p *phrase[T]) string, lookup f
 		}
 		p.previewText = t
 		p.preview = ""
+		p.previewLemma = ""
 		p.previewErr = nil
 		p.previewPending = true
 		cmds = append(cmds, lookup(i, t))

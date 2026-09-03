@@ -28,12 +28,14 @@ func FindPhrase(sentence, phrase string) (start, end int) {
 // within sentence, rendered through tmpl (nil uses the built-in default
 // templates). If start is negative, no byte range was found/chosen and the
 // sentence (if any) is shown without a marked word. definition is expected
-// to already be formatted (see FormatDefinition).
-func BuildNote(tmpl *anki.Templates, deck string, tags []string, e Entry, sentence string, start, end int, definition string) anki.Note {
+// to already be formatted (see FormatDefinition); lemma is the raw
+// dictionary/base-form lemma, "" if there is none.
+func BuildNote(tmpl *anki.Templates, deck string, tags []string, e Entry, sentence string, start, end int, definition, lemma string) anki.Note {
 	data := anki.CardData{
 		Word:       e.Word,
 		After:      sentence,
 		Definition: definition,
+		Lemma:      lemma,
 	}
 	if start >= 0 {
 		data.Word = sentence[start:end]

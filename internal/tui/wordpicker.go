@@ -31,14 +31,14 @@ func (m *Model) enterWordPick() {
 // it last was, e.g. after an expansion or merge), so a preview of what will
 // be saved is visible before submitting.
 func (m *Model) refreshGlosses() tea.Cmd {
-	if m.cfg.Translator == nil {
+	if m.cfg.Dict == nil {
 		return nil
 	}
 	text := func(p *phrase[struct{}]) string {
 		return m.sentence[m.ps.tokens[m.ps.wordTokens[p.lo]].start:m.ps.tokens[m.ps.wordTokens[p.hi]].end]
 	}
 	lookup := func(i int, text string) tea.Cmd {
-		return fetchGlossCmd(m.cfg.Translator, text, m.sentence, i, text)
+		return fetchGlossCmd(m.cfg.Dict, text, m.sentence, i, text)
 	}
 	return m.ps.refreshPreviews(text, lookup)
 }
@@ -101,7 +101,7 @@ func (m Model) submitWordPick() (tea.Model, tea.Cmd) {
 		}
 		start := m.ps.tokens[m.ps.wordTokens[p.lo]].start
 		end := m.ps.tokens[m.ps.wordTokens[p.hi]].end
-		sel := anki.WordSelection{Start: start, End: end, Gloss: p.preview}
+		sel := anki.WordSelection{Start: start, End: end, Gloss: p.preview, Lemma: p.previewLemma}
 		notes = append(notes, m.cfg.BuildNote(m.selLineIndex, m.sentence, sel))
 	}
 	if len(notes) == 0 {
@@ -162,7 +162,7 @@ func (m Model) renderWordPicker() string {
 	}
 	b.WriteString("\n")
 
-	if m.cfg.Translator != nil {
+	if m.cfg.Dict != nil {
 		ordered := make([]phrase[struct{}], len(m.ps.phrases))
 		copy(ordered, m.ps.phrases)
 		sort.Slice(ordered, func(i, j int) bool { return ordered[i].lo < ordered[j].lo })
@@ -178,6 +178,8 @@ func (m Model) renderWordPicker() string {
 				fmt.Fprintf(&b, "%s: lookup failed (%v)\n", text, p.previewErr)
 			case p.preview == "":
 				fmt.Fprintf(&b, "%s: (none)\n", text)
+			case p.previewLemma != "":
+				fmt.Fprintf(&b, "%s: %s (%s)\n", text, p.preview, p.previewLemma)
 			default:
 				fmt.Fprintf(&b, "%s: %s\n", text, p.preview)
 			}

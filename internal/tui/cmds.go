@@ -6,7 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/joshgummersall/ankix/internal/anki"
-	"github.com/joshgummersall/ankix/internal/translate"
+	"github.com/joshgummersall/ankix/internal/dict"
 )
 
 // glossResultMsg carries a gloss lookup result back for the phrase at idx,
@@ -16,6 +16,7 @@ type glossResultMsg struct {
 	idx   int
 	text  string
 	gloss string
+	lemma string
 	err   error
 }
 
@@ -25,10 +26,10 @@ type submitResultMsg struct {
 	err        error // first non-duplicate error encountered, if any
 }
 
-func fetchGlossCmd(p translate.Provider, word, sentence string, idx int, text string) tea.Cmd {
+func fetchGlossCmd(p dict.Provider, word, sentence string, idx int, text string) tea.Cmd {
 	return func() tea.Msg {
-		gloss, err := p.Gloss(word, sentence)
-		return glossResultMsg{idx: idx, text: text, gloss: gloss, err: err}
+		gloss, lemma, err := p.Define(word, sentence)
+		return glossResultMsg{idx: idx, text: text, gloss: gloss, lemma: lemma, err: err}
 	}
 }
 

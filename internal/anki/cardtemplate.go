@@ -19,6 +19,7 @@ type CardData struct {
 	After       string // sentence after Word if Highlighted, else the whole (unmarked) sentence
 	Highlighted bool   // whether Before/Word/After is an actual split of a sentence; false when there's no sentence to mark Word within (e.g. Kindle couldn't find the headword in its usage example)
 	Definition  string // formatted definition or gloss (HTML), "" if none
+	Lemma       string // dictionary/base-form lemma, "" if none or same as Definition (e.g. Kindle only)
 	Source      string // video/episode/page title, "" for Kindle
 	Timestamp   string // "3:41", "" if not applicable
 	Link        string // deep link URL, "" if none
@@ -49,12 +50,14 @@ func formatAttribution(source, timestamp, link, linkLabel string) string {
 
 // DefaultFrontTemplate and DefaultBackTemplate reproduce ankix's built-in
 // card formatting: a bold headword above the sentence with the marked
-// phrase italicized, and the definition/gloss above an attribution line.
+// phrase italicized, and the definition/gloss (with its lemma in
+// parentheses, when there is one) above an attribution line.
 const (
 	DefaultFrontTemplate = `<b>{{.Word}}</b>` +
 		`{{if or .Highlighted .After}}<br><br>{{end}}` +
 		`{{if .Highlighted}}{{.Before}}<i>{{.Word}}</i>{{.After}}{{else}}{{.After}}{{end}}`
-	DefaultBackTemplate = `{{.Definition}}{{if and .Definition .Attribution}}<br><br>{{end}}{{.Attribution}}`
+	DefaultBackTemplate = `{{.Definition}}{{if .Lemma}} ({{.Lemma}}){{end}}` +
+		`{{if and .Definition .Attribution}}<br><br>{{end}}{{.Attribution}}`
 )
 
 // Templates holds the compiled Front/Back card templates used to render
@@ -75,6 +78,7 @@ var sampleCardData = []CardData{
 		After:       " after",
 		Highlighted: true,
 		Definition:  "definition",
+		Lemma:       "lemma",
 		Source:      "source",
 		Timestamp:   "0:00",
 		Link:        "https://example.com",
