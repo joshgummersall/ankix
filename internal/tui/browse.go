@@ -12,10 +12,9 @@ import (
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.showHelp {
-		switch msg.String() {
-		case "?", "esc", "q", "ctrl+c":
-			m.showHelp = false
-		}
+		sections := m.helpSections()
+		rows, _ := helpViewport(m.width, m.height)
+		m.helpScroll, m.showHelp = handleHelpKey(msg.String(), m.helpScroll, helpMaxScroll(m.width, m.height, sections), rows)
 		return m, nil
 	}
 
@@ -23,8 +22,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleSearchKey(msg)
 	}
 
-	if msg.String() == "?" && (m.state == stateBrowse || m.state == stateVisual) {
+	// The two text-entry states swallow `?` as a literal character, so help
+	// is reachable from every other state.
+	if msg.String() == "?" && m.state != stateEditSentence && m.state != stateRefine {
 		m.showHelp = true
+		m.helpScroll = 0
 		return m, nil
 	}
 
@@ -278,14 +280,25 @@ func (m *Model) syncViewport() {
 	docLine := m.lineOfCursor()
 	m.savePosition()
 
-	line := lineVisualLine[docLine]
-	top := m.viewport.YOffset
-	bottom := top + m.viewport.Height
-	if line < top {
-		m.viewport.SetYOffset(line)
-	} else if line >= bottom {
-		m.viewport.SetYOffset(line - m.viewport.Height + 1)
+	m.scrollTo(lineVisualLine[docLine])
+}
+
+// scrollTo scrolls the viewport so the cursor's visual line keeps at least
+// half a screen of context above and below it — vim's `scrolloff` set high
+// enough to pin the cursor mid-screen while the text moves past it. Near
+// either end of the document there is no more content to scroll in, so
+// SetYOffset's clamp takes over and the cursor walks to the top or bottom
+// edge instead.
+func (m *Model) scrollTo(line int) {
+	if m.viewport.Height <= 0 {
+		return
 	}
+	margin := (m.viewport.Height - 1) / 2
+	top := m.viewport.YOffset
+	// margin <= (Height-1)/2, so the two bounds never cross.
+	top = max(top, line+margin-m.viewport.Height+1)
+	top = min(top, line-margin)
+	m.viewport.SetYOffset(top)
 }
 
 // savePosition persists the cursor's exact word as the resume point for
