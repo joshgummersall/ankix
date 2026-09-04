@@ -213,13 +213,29 @@ func (m *Model) setStatus(s string, isErr bool) {
 	m.statusErr = isErr
 }
 
+// progressText is the dim header readout of where the cursor sits in the
+// document: the current line of the total, plus that as a percentage, which
+// answers "how much is left?" at a glance.
+func (m Model) progressText() string {
+	n := len(m.cfg.Document.Lines)
+	if n == 0 {
+		return "0 / 0, 0%"
+	}
+	line := m.lineOfCursor()
+	pct := 100
+	if n > 1 {
+		pct = line * 100 / (n - 1)
+	}
+	return fmt.Sprintf("%d / %d, %d%%", line+1, n, pct)
+}
+
 func (m Model) View() string {
 	if !m.ready {
 		return "loading..."
 	}
 
 	header := titleStyle.Render(m.cfg.Title) +
-		"  " + helpStyle.Render(fmt.Sprintf("%d lines loaded", len(m.cfg.Document.Lines)))
+		"  " + helpStyle.Render(m.progressText())
 	if m.searching {
 		header = m.searchInput.View()
 	}
