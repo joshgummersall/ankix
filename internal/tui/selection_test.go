@@ -94,3 +94,26 @@ func TestWordSelection_LMovesAndVStartsSelection(t *testing.T) {
 		t.Errorf("sentence = %q, want %q", m.sentence, want)
 	}
 }
+
+// A number is a word too: the picker used to tokenize letters only, so the
+// cursor could never reach "300" and `l` looked broken on the last word
+// before it.
+func TestWordPick_CursorReachesANumber(t *testing.T) {
+	lines := []Line{{Text: "en vez de llevar 50 personas, lleva 300."}}
+	m := New(Config{Document: &Document{Lines: lines}})
+	mi, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
+	m = mi.(Model)
+
+	m.selWordStart, m.selWordEnd = 0, len(m.words)-1
+	m.enterWordPick()
+
+	for i := 0; i < 20; i++ { // more presses than words: parks on the last one
+		mi, _ = m.Update(key("l"))
+		m = mi.(Model)
+	}
+
+	tok := m.ps.tokens[m.ps.wordTokens[m.ps.wordCursor]]
+	if got := m.sentence[tok.start:tok.end]; got != "300" {
+		t.Errorf("cursor word = %q, want %q", got, "300")
+	}
+}

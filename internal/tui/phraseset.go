@@ -13,12 +13,14 @@ import (
 
 // token is a slice of the working sentence: either a word (matched by
 // wordRe) or a separator (whitespace/punctuation) run between words.
+// Digits count as word characters so a number ("lleva 300") can be picked
+// or pulled into a phrase like any other word.
 type token struct {
 	start, end int
 	isWord     bool
 }
 
-var wordRe = regexp.MustCompile(`[\p{L}]+`)
+var wordRe = regexp.MustCompile(`[\p{L}\p{N}]+`)
 
 func tokenize(s string) []token {
 	var tokens []token
