@@ -21,7 +21,7 @@ func documentHelpSections(refine bool) []helpSection {
 	sections := []helpSection{
 		{"Transcript", [][2]string{
 			{"h / l, ← / →", "move by word"},
-			{"j / k, ↓ / ↑", "move by line"},
+			{"j / k, ↓ / ↑", "move by screen row"},
 			{"ctrl+d / ctrl+u", "move by half page"},
 			{"gg / G", "jump to first / last word"},
 			{") / (", "jump to next / previous sentence"},

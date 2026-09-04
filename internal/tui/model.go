@@ -53,9 +53,9 @@ type Model struct {
 	height   int
 	ready    bool
 
-	words          []word // every word in the document, in order, tagged with its source line
-	lineFirstWord  []int  // lineFirstWord[i] = index into words of line i's first word
-	lineVisualLine []int  // lineVisualLine[i] = wrapped viewport line that line i starts on, set by syncViewport
+	words         []word    // every word in the document, in order, tagged with its source line
+	lineFirstWord []int     // lineFirstWord[i] = index into words of line i's first word
+	layout        docLayout // where the last render put each word once wrapped, set by syncViewport
 
 	cursorWord    int
 	pendingG      bool

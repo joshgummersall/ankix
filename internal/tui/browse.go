@@ -2,10 +2,13 @@ package tui
 
 import (
 	"fmt"
+	"sort"
 	"strings"
+	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/joshgummersall/ankix/internal/position"
 )
@@ -162,9 +165,53 @@ func (m *Model) moveCursorWord(delta int) {
 	m.syncViewport()
 }
 
-// moveCursorLine jumps the cursor to the first word of the next/previous
-// line, for fast coarse navigation (h/l moves word-by-word instead).
+// moveCursorLine moves the cursor delta visual rows down (or up), like
+// vim's gj/gk: a long document line wraps across several rows on a narrow
+// (or zoomed-in) terminal, and j should step through those rows rather than
+// skip the whole line. Within the target row the cursor keeps as close to
+// its current column as the words there allow.
 func (m *Model) moveCursorLine(delta int) {
+	rows := m.layout.wordRow
+	if len(m.words) == 0 || len(rows) != len(m.words) {
+		m.moveCursorDocLine(delta) // no layout yet — nothing has been rendered
+		return
+	}
+
+	target := rows[m.cursorWord] + delta
+	col := m.layout.wordCol[m.cursorWord]
+
+	// rows is non-decreasing in word order, so the first word at or past
+	// the target row is a binary search away. A row can hold no word at all
+	// (the tail of a hard-broken long word), hence the nearest row in the
+	// direction of travel rather than an exact match.
+	i := sort.Search(len(rows), func(j int) bool { return rows[j] >= target })
+	switch {
+	case i == len(rows):
+		i = len(rows) - 1
+	case rows[i] > target && delta < 0 && i > 0:
+		i--
+	}
+
+	lo, hi := i, i
+	for lo > 0 && rows[lo-1] == rows[i] {
+		lo--
+	}
+	for hi+1 < len(rows) && rows[hi+1] == rows[i] {
+		hi++
+	}
+	best := lo
+	for j := lo + 1; j <= hi; j++ {
+		if absInt(m.layout.wordCol[j]-col) < absInt(m.layout.wordCol[best]-col) {
+			best = j
+		}
+	}
+	m.cursorWord = best
+	m.syncViewport()
+}
+
+// moveCursorDocLine is the pre-layout fallback for moveCursorLine: jump to
+// the first word of the next/previous document line.
+func (m *Model) moveCursorDocLine(delta int) {
 	line := m.lineOfCursor() + delta
 	if line < 0 {
 		line = 0
@@ -172,8 +219,18 @@ func (m *Model) moveCursorLine(delta int) {
 	if max := len(m.lineFirstWord) - 1; line > max {
 		line = max
 	}
+	if len(m.lineFirstWord) == 0 {
+		return
+	}
 	m.cursorWord = m.lineFirstWord[line]
 	m.syncViewport()
+}
+
+func absInt(i int) int {
+	if i < 0 {
+		return -i
+	}
+	return i
 }
 
 // halfPageLines returns half the viewport's height in lines (at least 1),
@@ -273,14 +330,15 @@ func (m *Model) syncViewport() {
 	if !m.ready {
 		return
 	}
-	content, lineVisualLine := m.renderDocument()
+	content, layout := m.renderDocument()
 	m.viewport.SetContent(content)
-	m.lineVisualLine = lineVisualLine
+	m.layout = layout
 
-	docLine := m.lineOfCursor()
 	m.savePosition()
 
-	m.scrollTo(lineVisualLine[docLine])
+	if m.cursorWord < len(layout.wordRow) {
+		m.scrollTo(layout.wordRow[m.cursorWord])
+	}
 }
 
 // scrollTo scrolls the viewport so the cursor's visual line keeps at least
@@ -351,14 +409,16 @@ func (m Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // renderDocument renders every line and returns the full content along with
-// lineVisualLine, the visual (post-wrap) line each document line starts on —
-// lines can span more than one visual line once wrapped to the viewport
-// width, so this is not simply the line index.
-func (m Model) renderDocument() (string, []int) {
+// the layout it produced — where each word ended up once the content was
+// wrapped to the viewport width, which j/k and scrolling both navigate by.
+func (m Model) renderDocument() (string, docLayout) {
 	var b strings.Builder
 	lines := m.cfg.Document.Lines
 	curLine := m.lineOfCursor()
-	lineVisualLine := make([]int, len(lines))
+	layout := docLayout{
+		wordRow: make([]int, len(m.words)),
+		wordCol: make([]int, len(m.words)),
+	}
 	visual := 0
 
 	selLo, selHi := -1, -1
@@ -381,17 +441,33 @@ func (m Model) renderDocument() (string, []int) {
 			}
 		}
 
-		marker := "  "
+		markerText := "  "
 		switch {
 		case lineCarded:
-			marker = cardedMarkerStyle.Render("✓ ")
+			markerText = "✓ "
 		case i == curLine:
-			marker = currentLineMarkerStyle.Render("› ")
+			markerText = "› "
 		}
-		ts := ""
+		marker := markerText
+		switch {
+		case lineCarded:
+			marker = cardedMarkerStyle.Render(markerText)
+		case i == curLine:
+			marker = currentLineMarkerStyle.Render(markerText)
+		}
+		tsText, ts := "", ""
 		if l.Label != "" {
-			ts = timestampStyle.Render(l.Label + " ")
+			tsText = l.Label + " "
+			ts = timestampStyle.Render(tsText)
 		}
+
+		// plain mirrors the styled line without any escape sequences, and
+		// wordOff records where each word starts in it, so the wrapped
+		// render can be walked back onto individual words below.
+		var plain strings.Builder
+		plain.WriteString(markerText)
+		plain.WriteString(tsText)
+		wordOff := make([]int, 0, end-start)
 
 		var words strings.Builder
 		for wi := start; wi < end; wi++ {
@@ -408,7 +484,10 @@ func (m Model) renderDocument() (string, []int) {
 					sep = cardedWordStyle.Render(sep)
 				}
 				words.WriteString(sep)
+				plain.WriteString(" ")
 			}
+			wordOff = append(wordOff, plain.Len())
+			plain.WriteString(m.words[wi].Text)
 			text := m.words[wi].Text
 			switch {
 			case selLo != -1 && wi >= selLo && wi <= selHi:
@@ -430,11 +509,55 @@ func (m Model) renderDocument() (string, []int) {
 			line = lipgloss.NewStyle().Width(m.viewport.Width).Render(line)
 		}
 
-		lineVisualLine[i] = visual
+		layout.assign(ansi.Strip(line), plain.String(), wordOff, start, visual)
 		visual += strings.Count(line, "\n") + 1
 
 		b.WriteString(line)
 		b.WriteString("\n")
 	}
-	return b.String(), lineVisualLine
+	return b.String(), layout
+}
+
+// docLayout records where the rendered document put each word: the visual
+// (post-wrap) row it starts on and the column within that row. One document
+// line can fill a screenful of rows once wrapped, so this — not the line
+// index — is what j/k steps through and what the viewport centers on.
+type docLayout struct {
+	wordRow []int
+	wordCol []int
+}
+
+// assign walks one line's wrapped, ANSI-stripped render alongside its plain
+// text and records the row and column each of its words landed on. The two
+// strings only stay in step if the wrap's edits are skipped: breaking at a
+// space consumes it, and a fixed Width pads every row out with spaces that
+// were never in the text.
+func (d docLayout) assign(wrapped, plain string, wordOff []int, firstWord, firstRow int) {
+	p, row, col, next := 0, firstRow, 0, 0
+	place := func() {
+		for next < len(wordOff) && wordOff[next] == p {
+			d.wordRow[firstWord+next] = row
+			d.wordCol[firstWord+next] = col
+			next++
+		}
+	}
+	place()
+
+	for _, r := range wrapped {
+		if r == '\n' {
+			row, col = row+1, 0
+			for p < len(plain) && plain[p] == ' ' {
+				p++
+			}
+			place()
+			continue
+		}
+		pr, size := utf8.DecodeRuneInString(plain[p:])
+		if size == 0 || r != pr {
+			continue // padding, not text
+		}
+		p += size
+		col++
+		place()
+	}
 }
