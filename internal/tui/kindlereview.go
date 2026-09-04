@@ -100,6 +100,9 @@ type KindleModel struct {
 	status    string
 	statusErr bool
 
+	showHelp   bool
+	helpScroll int
+
 	initCmd tea.Cmd // definition lookups queued by the first loadGroup, returned from Init
 }
 
@@ -179,12 +182,8 @@ func (m *KindleModel) pickingStatus() string {
 	if cards != 1 {
 		word = "cards"
 	}
-	refine := ""
-	if _, ok := refineAvailable(m.cfg.Dict); ok {
-		refine = "r refine, "
-	}
-	return fmt.Sprintf("sentence %d/%d — %d %s will be added — h/l move, v expand/add word, d delete word, e edit sentence, %senter add",
-		m.groupIdx+1, len(m.groups), cards, word, refine)
+	return fmt.Sprintf("sentence %d/%d — %d %s will be added",
+		m.groupIdx+1, len(m.groups), cards, word)
 }
 
 // addPhraseAtCursor adds a new single-word phrase for the word under the
@@ -260,6 +259,13 @@ func (m KindleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m KindleModel) handleKindleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.showHelp {
+		sections := m.helpSections()
+		rows, _ := helpViewport(m.width, m.height)
+		m.helpScroll, m.showHelp = handleHelpKey(msg.String(), m.helpScroll, helpMaxScroll(m.width, m.height, sections), rows)
+		return m, nil
+	}
+
 	if m.state == kDone {
 		switch msg.String() {
 		case "q", "ctrl+c", "enter", "esc":
@@ -270,11 +276,16 @@ func (m KindleModel) handleKindleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Both text prompts handle ctrl+c themselves and must keep every other
 	// rune, including a bare q — "quitar" typed into a correction would
-	// otherwise quit mid-review and lose the whole sentence group.
+	// otherwise quit mid-review and lose the whole sentence group. `?` is
+	// likewise a literal there, so help is reachable from every other state.
 	if m.state != kEditSentence && m.state != kRefine {
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
+		case "?":
+			m.showHelp = true
+			m.helpScroll = 0
+			return m, nil
 		}
 	}
 
@@ -305,7 +316,7 @@ func (m KindleModel) handlePickingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.ps.beginExpand(m.newEntryAtCursor())
 		m.state = kExpanding
-		m.setStatus("h/l extend selection, enter confirm, esc cancel", false)
+		m.setStatus(m.pickingStatus(), false)
 		return m, m.ps.debounceRefresh()
 	case "d":
 		m.ps.deleteNearestPhrase()
@@ -445,7 +456,13 @@ func (m KindleModel) View() string {
 	}
 	footer := statusLine.Render(m.status) + "\n" + helpStyle.Render(m.helpText())
 
-	return header + "\n" + body + "\n" + footer + "\n"
+	view := header + "\n" + body + "\n" + footer + "\n"
+
+	if m.showHelp {
+		view = overlayHelp(view, m.width, m.height, m.helpSections(), m.helpScroll)
+	}
+
+	return view
 }
 
 func (m KindleModel) renderKindlePicker() string {
@@ -472,23 +489,25 @@ func (m KindleModel) renderKindleEditSentence() string {
 	return "\n" + helpStyle.Render("fix typos in the sentence, then confirm — applies to every word from this sentence") + "\n\n" + m.sentenceInput.View() + "\n"
 }
 
+// helpText mirrors Model.helpText: a single non-wrapping hint, with the
+// bindings themselves living in the `?` modal.
 func (m KindleModel) helpText() string {
 	switch m.state {
-	case kExpanding:
-		return "h/l extend selection  enter confirm  esc cancel"
 	case kEditSentence:
-		return "enter confirm edit  esc cancel"
+		return "enter save  esc discard"
 	case kRefine:
-		return "type a correction  enter apply  esc cancel"
+		return "enter apply  esc cancel"
 	case kSubmitting:
 		return "submitting..."
 	default:
-		refine := ""
-		if _, ok := refineAvailable(m.cfg.Dict); ok {
-			refine = "  r refine translation"
-		}
-		return "h/l move  v expand/add word under cursor  d delete word  e edit sentence" + refine + "  enter add all  q quit"
+		return "? help"
 	}
+}
+
+// helpSections is the modal's content for the Kindle review model.
+func (m KindleModel) helpSections() []helpSection {
+	_, refine := refineAvailable(m.cfg.Dict)
+	return kindleHelpSections(refine)
 }
 
 // kindleDefResultMsg carries a definition lookup result back for the phrase

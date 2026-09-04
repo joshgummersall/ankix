@@ -70,7 +70,8 @@ type Model struct {
 	searchInput textinput.Model
 	searchTerm  string
 
-	showHelp bool
+	showHelp   bool
+	helpScroll int
 
 	selWordStart, selWordEnd int // confirmed word selection, inclusive
 
@@ -249,31 +250,33 @@ func (m Model) View() string {
 	view := header + "\n" + body + "\n" + footer
 
 	if m.showHelp {
-		view = m.overlayHelp(view)
+		view = overlayHelp(view, m.width, m.height, m.helpSections(), m.helpScroll)
 	}
 
 	return view
 }
 
+// helpText is the one-line footer hint. It deliberately does not list
+// keybindings — a full list wraps on a narrow (or zoomed-in) terminal, so
+// the bindings live in the `?` modal instead. The two text-entry states are
+// the exception: `?` is typed into the input there, so help can't be opened
+// and the two keys that do work are named outright.
 func (m Model) helpText() string {
 	switch m.state {
-	case stateVisual:
-		return "h/l/j/k extend selection  enter complete selection  esc cancel"
-	case stateWordPick:
-		refine := ""
-		if _, ok := refineAvailable(m.cfg.Dict); ok {
-			refine = "  r refine translation"
-		}
-		return "h/l move  (/) jump to marked word  v expand/add word  d delete word  e edit sentence" + refine + "  enter add all  esc cancel"
-	case stateRefine:
-		return "type a correction  enter apply  esc cancel"
-	case stateWordExpand:
-		return "h/l extend selection  enter confirm  esc cancel"
 	case stateEditSentence:
-		return "enter save  esc discard changes"
+		return "enter save  esc discard"
+	case stateRefine:
+		return "enter apply  esc cancel"
 	case stateSubmitting:
 		return "submitting..."
 	default:
-		return "h/l word  j/k line  ctrl+d/ctrl+u half page  )/( sentence  gg/G top/bottom  v select  V select sentence  / search  enter confirm  ? help  q quit"
+		return "? help"
 	}
+}
+
+// helpSections is the modal's content for this model, with the refine keys
+// included only when the configured dict can actually refine.
+func (m Model) helpSections() []helpSection {
+	_, refine := refineAvailable(m.cfg.Dict)
+	return documentHelpSections(refine)
 }

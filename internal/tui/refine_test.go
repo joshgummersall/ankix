@@ -322,9 +322,9 @@ func TestRefine_InertWithoutARefiner(t *testing.T) {
 			if m.state != stateWordPick {
 				t.Errorf("state = %v, want r to be inert", m.state)
 			}
-			if strings.Contains(m.helpText(), "refine") {
-				t.Errorf("help text advertises a dead key: %q", m.helpText())
-			}
+			// The help modal's own version of this check lives in
+			// TestHelpSections_OmitRefineWithoutARefiner — the footer no
+			// longer lists keys at all.
 		})
 	}
 }

@@ -66,7 +66,7 @@ func (m Model) handleWordPickKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.ps.beginExpand(struct{}{})
 		m.state = stateWordExpand
-		m.setStatus("h/l extend selection, enter confirm, esc cancel", false)
+		m.setStatus("", false)
 		return m, m.ps.debounceRefresh()
 	case "d":
 		m.ps.deleteNearestPhrase()
