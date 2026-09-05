@@ -11,6 +11,12 @@ subtitle track, or a web article, defines each word with a local Ollama model
 using the sentence it appears in — not just a bare dictionary entry — and
 syncs ready-to-study notes straight into Anki via AnkiConnect.
 
+**"Gloss"** turns up throughout this README and in the flag names. It's the
+linguistic term for a short translation of a word *as used in one specific
+sentence*, as opposed to a dictionary definition, which lists every sense out
+of context. That contextual reading is what goes on the card; the word's
+dictionary base form travels with it separately, as the *lemma*.
+
 ## Install
 
 ```
