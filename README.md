@@ -69,6 +69,7 @@ ankiconnect_url = "http://localhost:8765"
 ollama_url = "http://localhost:11434"
 ollama_model = "ankix"  # the model ankix install builds and every command looks up
 base_model = "llama3.2:3b"  # what ankix install builds that model FROM
+ollama_keep_alive = "30m"   # how long Ollama holds the model in memory after a lookup
 no_gloss = false
 lang = "es"          # seeds --lang (kindle) and --sub-lang (youtube)
 
@@ -190,6 +191,7 @@ Flags (persistent across both subcommands):
 - `--ankiconnect-url` — AnkiConnect URL (default `http://localhost:8765`)
 - `--ollama-url` — Ollama URL (default `http://localhost:11434`)
 - `--ollama-model` — Ollama gloss model name (default `ankix`; see [Keeping the model in sync](#keeping-the-model-in-sync))
+- `--ollama-keep-alive` — how long Ollama keeps the model loaded after a lookup (default `30m`; see [Model warm-up](#model-warm-up))
 - `--sub-lang` — subtitle language code (default `es`)
 - `--cache-dir` — subtitle cache directory
 - `--no-gloss` — skip Ollama gloss lookups
@@ -210,6 +212,7 @@ Flags:
 - `--ankiconnect-url` — AnkiConnect URL (default `http://localhost:8765`)
 - `--ollama-url` — Ollama URL (default `http://localhost:11434`)
 - `--ollama-model` — Ollama gloss model name (default `ankix`; see [Keeping the model in sync](#keeping-the-model-in-sync))
+- `--ollama-keep-alive` — how long Ollama keeps the model loaded after a lookup (default `30m`; see [Model warm-up](#model-warm-up))
 - `--no-gloss` — skip Ollama gloss lookups
 
 ## Model warm-up
@@ -226,6 +229,16 @@ Modelfile's system prompt and few-shot examples too; both the weights and
 that prompt prefix are then reused by real lookups. Nothing waits on it —
 if it fails, the same failure resurfaces on the first genuine lookup, which
 reports it properly. `--no-gloss` skips it along with everything else.
+
+Ollama unloads an idle model after 5 minutes by default, which is shorter
+than the gaps between lookups when you're reading — so the model would drop
+out mid-session and the next word would pay the load cost again. ankix sends
+`keep_alive` with every request to widen that window to 30 minutes. Change
+it with `--ollama-keep-alive` (or `ollama_keep_alive` in the config file):
+a duration like `1h`, a number of seconds, `0` to unload as soon as each
+reply is sent, or a negative value to keep the model loaded indefinitely.
+Longer keeps memory occupied after ankix exits; shorter gives it back sooner
+at the cost of reloading.
 
 ## Fixing a translation
 

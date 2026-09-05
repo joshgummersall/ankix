@@ -16,6 +16,11 @@ type config struct {
 	AnkiConnectURL string `toml:"ankiconnect_url"`
 	OllamaURL      string `toml:"ollama_url"`
 	OllamaModel    string `toml:"ollama_model"`
+	// OllamaKeepAlive is how long Ollama holds the gloss model in memory
+	// after a lookup. It's here because the right value depends on the
+	// machine, not the session: a big base model on a laptop is worth
+	// unloading promptly, and on a workstation is worth keeping resident.
+	OllamaKeepAlive string `toml:"ollama_keep_alive"`
 	// BaseModel is the Ollama model `ankix install` builds the gloss model
 	// FROM. It belongs here rather than only on the flag because every
 	// upgrade re-runs `ankix install` (see vocab.Tag), and a base model

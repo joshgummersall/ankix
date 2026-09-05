@@ -14,11 +14,25 @@ import (
 	"strings"
 )
 
+// DefaultKeepAlive is how long ankix asks Ollama to hold the model in
+// memory after a lookup. Ollama's own default is 5 minutes, which is
+// shorter than the gaps between lookups in ordinary use — you read a page,
+// then pick a word — so the model unloads mid-session and the next word
+// pays the load cost all over again. This is sized to outlast reading, not
+// to hold memory forever; see Provider.KeepAlive for the other settings.
+const DefaultKeepAlive = "30m"
+
 // Provider defines words by querying a local Ollama chat model built from
 // ollama/Modelfile.
 type Provider struct {
-	URL        string // e.g. "http://localhost:11434"
-	Model      string // e.g. "ankix"
+	URL   string // e.g. "http://localhost:11434"
+	Model string // e.g. "ankix"
+	// KeepAlive is sent with every request as the Ollama API's keep_alive:
+	// a duration ("30m"), a number of seconds ("1800"), "0" to unload as
+	// soon as the reply is sent, or any negative value to keep the model
+	// loaded indefinitely. Empty leaves the field off the request, which
+	// gives Ollama's own default.
+	KeepAlive  string
 	HTTPClient *http.Client
 }
 
@@ -27,6 +41,7 @@ func New(url, model string) *Provider {
 	return &Provider{
 		URL:        strings.TrimSuffix(url, "/"),
 		Model:      model,
+		KeepAlive:  DefaultKeepAlive,
 		HTTPClient: http.DefaultClient,
 	}
 }
@@ -115,9 +130,10 @@ func parseReply(reply string) (translation, lemma string, ok bool) {
 }
 
 type chatRequest struct {
-	Model    string        `json:"model"`
-	Messages []chatMessage `json:"messages"`
-	Stream   bool          `json:"stream"`
+	Model     string        `json:"model"`
+	Messages  []chatMessage `json:"messages"`
+	Stream    bool          `json:"stream"`
+	KeepAlive string        `json:"keep_alive,omitempty"`
 }
 
 type chatMessage struct {
@@ -131,9 +147,10 @@ type chatResponse struct {
 
 func (p *Provider) chat(msgs []chatMessage) (string, error) {
 	req := chatRequest{
-		Model:    p.Model,
-		Messages: msgs,
-		Stream:   false,
+		Model:     p.Model,
+		Messages:  msgs,
+		Stream:    false,
+		KeepAlive: p.KeepAlive,
 	}
 	body, err := json.Marshal(req)
 	if err != nil {

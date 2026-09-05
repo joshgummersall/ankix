@@ -199,3 +199,70 @@ func TestWarm_ReturnsTheErrorFromAnUnreachableOllama(t *testing.T) {
 		t.Fatal("Warm succeeded against an unreachable Ollama")
 	}
 }
+
+// The point of keep_alive is that it rides on every request, not just the
+// warm-up: Ollama restarts the unload timer from the last request it saw,
+// so a Define without it would silently drop the model back to Ollama's own
+// 5-minute default.
+func TestChat_SendsKeepAliveOnEveryRequest(t *testing.T) {
+	var sent []chatRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req chatRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Errorf("decode request: %v", err)
+			return
+		}
+		sent = append(sent, req)
+		json.NewEncoder(w).Encode(chatResponse{Message: chatMessage{Role: "assistant", Content: "TRANSLATION: bench | LEMMA: bench"}})
+	}))
+	t.Cleanup(srv.Close)
+
+	p := New(srv.URL, "ankix")
+	if p.KeepAlive != DefaultKeepAlive {
+		t.Fatalf("New KeepAlive = %q, want the default %q", p.KeepAlive, DefaultKeepAlive)
+	}
+	p.KeepAlive = "42m"
+
+	if err := p.Warm(); err != nil {
+		t.Fatalf("Warm: %v", err)
+	}
+	if _, _, err := p.Define("banco", "Nos sentamos en el banco."); err != nil {
+		t.Fatalf("Define: %v", err)
+	}
+	if _, _, err := p.Refine("banco", "Nos sentamos en el banco.", "bench", "", "shorter"); err != nil {
+		t.Fatalf("Refine: %v", err)
+	}
+
+	if len(sent) != 3 {
+		t.Fatalf("sent %d requests, want 3", len(sent))
+	}
+	for i, req := range sent {
+		if req.KeepAlive != "42m" {
+			t.Errorf("request %d keep_alive = %q, want %q", i, req.KeepAlive, "42m")
+		}
+	}
+}
+
+// An empty KeepAlive has to leave the field off the wire entirely — sending
+// "" would be a value Ollama rejects, not a request for its default.
+func TestChat_OmitsAnEmptyKeepAlive(t *testing.T) {
+	var body map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode request: %v", err)
+			return
+		}
+		json.NewEncoder(w).Encode(chatResponse{Message: chatMessage{Role: "assistant", Content: "TRANSLATION: bench | LEMMA: bench"}})
+	}))
+	t.Cleanup(srv.Close)
+
+	p := New(srv.URL, "ankix")
+	p.KeepAlive = ""
+	if _, _, err := p.Define("banco", "Nos sentamos en el banco."); err != nil {
+		t.Fatalf("Define: %v", err)
+	}
+
+	if _, ok := body["keep_alive"]; ok {
+		t.Errorf("keep_alive was sent as %#v, want the field omitted", body["keep_alive"])
+	}
+}
