@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,16 +18,54 @@ import (
 // nil when glossing is switched off. Call it before any slow setup work
 // (downloading subtitles, fetching an article): it checks the model is
 // installed, and a missing one should be reported before a yt-dlp download,
-// not after.
+// not after. It also starts warming the model — the other reason to call it
+// first, since everything after it is time Ollama can spend loading.
 func newDictProvider() (dict.Provider, error) {
 	if noGloss {
 		return nil, nil
+	}
+	// Before resolveModel's round-trip: a bad flag value is worth reporting
+	// even when Ollama is unreachable.
+	if err := checkKeepAlive(ollamaKeepAlive); err != nil {
+		return nil, err
 	}
 	model, err := resolveModel(ollamaURL, ollamaModel)
 	if err != nil {
 		return nil, err
 	}
-	return ollama.New(ollamaURL, model), nil
+
+	p := ollama.New(ollamaURL, model)
+	p.KeepAlive = ollamaKeepAlive
+	// Loading a large base model takes seconds, and left alone it happens
+	// on the first word the user picks — after the review screen is already
+	// open, where the wait is visible. Start it here instead, so it overlaps
+	// the setup still to come (fetching the source, building the document,
+	// starting the TUI) and the reading the user does before picking
+	// anything. Nothing waits on it: the result is discarded, and a real
+	// problem resurfaces on the first genuine lookup, which reports it
+	// properly.
+	go p.Warm()
+	return p, nil
+}
+
+// checkKeepAlive rejects a --ollama-keep-alive Ollama wouldn't understand.
+// It's checked here, next to the model preflight, for the same reason: the
+// value rides on every lookup, so a typo Ollama rejects would otherwise
+// fail every word once the review screen is already open, rather than once
+// at startup where it can be fixed.
+func checkKeepAlive(v string) error {
+	if v == "" {
+		// Left off the request entirely; Ollama applies its own default.
+		return nil
+	}
+	// Ollama accepts either a bare number of seconds or a duration string.
+	if _, err := strconv.Atoi(v); err == nil {
+		return nil
+	}
+	if _, err := time.ParseDuration(v); err == nil {
+		return nil
+	}
+	return fmt.Errorf("invalid --ollama-keep-alive %q: want a duration like %q, a number of seconds, 0 to unload immediately, or a negative value to keep the model loaded indefinitely", v, ollama.DefaultKeepAlive)
 }
 
 // resolveModel returns the exact Ollama tag to use for the configured model

@@ -117,3 +117,21 @@ func TestResolveModel_UnreachableOllamaSaysSo(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckKeepAlive_AcceptsWhatOllamaAccepts(t *testing.T) {
+	// Durations, bare seconds, immediate unload, and the negative "keep it
+	// loaded indefinitely" form, which is why this isn't just ParseDuration.
+	for _, v := range []string{"", "30m", "1h30m", "90s", "1800", "0", "-1", "-1s"} {
+		if err := checkKeepAlive(v); err != nil {
+			t.Errorf("checkKeepAlive(%q) = %v, want nil", v, err)
+		}
+	}
+}
+
+func TestCheckKeepAlive_RejectsAValueOllamaWouldReject(t *testing.T) {
+	for _, v := range []string{"forever", "30 minutes", "30min", "m30"} {
+		if err := checkKeepAlive(v); err == nil {
+			t.Errorf("checkKeepAlive(%q) = nil, want an error", v)
+		}
+	}
+}
