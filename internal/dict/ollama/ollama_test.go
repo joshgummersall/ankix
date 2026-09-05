@@ -168,3 +168,34 @@ func TestParseReply(t *testing.T) {
 		})
 	}
 }
+
+// Warm has to look like a real lookup, not a bare load: the point is to make
+// Ollama evaluate the Modelfile's system prompt and few-shot examples, which
+// only happens for a request carrying an actual question.
+func TestWarm_SendsALookupShapedLikeARealOne(t *testing.T) {
+	p, sent := newTestProvider(t, "TRANSLATION: bench | LEMMA: bench")
+
+	if err := p.Warm(); err != nil {
+		t.Fatalf("Warm: %v", err)
+	}
+
+	if len(*sent) != 1 {
+		t.Fatalf("sent %d messages, want 1: %+v", len(*sent), *sent)
+	}
+	if (*sent)[0].Role != "user" {
+		t.Errorf("message role = %q, want \"user\"", (*sent)[0].Role)
+	}
+	if want := askContent(warmWord, warmUsage); (*sent)[0].Content != want {
+		t.Errorf("message content = %q, want %q", (*sent)[0].Content, want)
+	}
+}
+
+// Callers fire Warm in the background and ignore it, so it must never panic
+// or block on an Ollama that isn't there — the first real lookup reports that.
+func TestWarm_ReturnsTheErrorFromAnUnreachableOllama(t *testing.T) {
+	p := New("http://127.0.0.1:1", "ankix")
+
+	if err := p.Warm(); err == nil {
+		t.Fatal("Warm succeeded against an unreachable Ollama")
+	}
+}

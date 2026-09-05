@@ -170,3 +170,26 @@ func (p *Provider) chat(msgs []chatMessage) (string, error) {
 	}
 	return result, nil
 }
+
+// warmWord and warmUsage are the throwaway lookup Warm sends. Any word
+// would do — what matters is that the request is shaped exactly like a real
+// one, so Ollama evaluates the same Modelfile system prompt and few-shot
+// examples every later lookup starts from.
+const (
+	warmWord  = "banco"
+	warmUsage = "Nos sentamos en el banco del parque."
+)
+
+// Warm sends a throwaway lookup so Ollama loads the model and evaluates the
+// prompt prefix now, rather than on the user's first real word. With a large
+// base model most of a cold lookup is that one-time cost — loading the
+// weights, then evaluating the Modelfile's system prompt and few-shot
+// examples — and Ollama reuses both for subsequent requests.
+//
+// Callers run this in the background and ignore its result: a warm-up that
+// fails costs nothing, because the failure recurs on the first real lookup,
+// where it is reported properly.
+func (p *Provider) Warm() error {
+	_, err := p.chat([]chatMessage{{Role: "user", Content: askContent(warmWord, warmUsage)}})
+	return err
+}

@@ -17,7 +17,8 @@ import (
 // nil when glossing is switched off. Call it before any slow setup work
 // (downloading subtitles, fetching an article): it checks the model is
 // installed, and a missing one should be reported before a yt-dlp download,
-// not after.
+// not after. It also starts warming the model — the other reason to call it
+// first, since everything after it is time Ollama can spend loading.
 func newDictProvider() (dict.Provider, error) {
 	if noGloss {
 		return nil, nil
@@ -26,7 +27,17 @@ func newDictProvider() (dict.Provider, error) {
 	if err != nil {
 		return nil, err
 	}
-	return ollama.New(ollamaURL, model), nil
+	p := ollama.New(ollamaURL, model)
+	// Loading a large base model takes seconds, and left alone it happens
+	// on the first word the user picks — after the review screen is already
+	// open, where the wait is visible. Start it here instead, so it overlaps
+	// the setup still to come (fetching the source, building the document,
+	// starting the TUI) and the reading the user does before picking
+	// anything. Nothing waits on it: the result is discarded, and a real
+	// problem resurfaces on the first genuine lookup, which reports it
+	// properly.
+	go p.Warm()
+	return p, nil
 }
 
 // resolveModel returns the exact Ollama tag to use for the configured model

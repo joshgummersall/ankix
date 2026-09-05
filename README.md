@@ -212,6 +212,21 @@ Flags:
 - `--ollama-model` — Ollama gloss model name (default `ankix`; see [Keeping the model in sync](#keeping-the-model-in-sync))
 - `--no-gloss` — skip Ollama gloss lookups
 
+## Model warm-up
+
+Loading a gloss model costs seconds — more with a larger base model like
+Qwen — and that cost lands on whatever request arrives first. Left alone,
+that's the first word you pick, after the review screen is already open,
+where the wait is the most visible.
+
+So every command that glosses fires a throwaway lookup in the background as
+soon as it starts, before fetching the source or building the document. It's
+a real lookup rather than a bare load, which makes Ollama evaluate the
+Modelfile's system prompt and few-shot examples too; both the weights and
+that prompt prefix are then reused by real lookups. Nothing waits on it —
+if it fails, the same failure resurfaces on the first genuine lookup, which
+reports it properly. `--no-gloss` skips it along with everything else.
+
 ## Fixing a translation
 
 Small local models drift: a translation comes back with an extra adjective
