@@ -24,6 +24,7 @@ var (
 	ollamaModel     string
 	ollamaKeepAlive string
 	noGloss         bool
+	launchAnki      bool
 
 	// cardTemplates renders every note's Front/Back fields; compiled once
 	// in main() from the config file's [card] section (or the built-in
@@ -75,6 +76,7 @@ func main() {
 	root.PersistentFlags().StringVar(&ollamaModel, "ollama-model", strOr(cfg.OllamaModel, "ankix"), "Ollama gloss model -- both the name ankix install builds and the one every other command looks up; a bare name is pinned to this build's Modelfile checksum (e.g. ankix:"+vocab.Checksum()+"), a name with an explicit :tag is used as-is")
 	root.PersistentFlags().StringVar(&ollamaKeepAlive, "ollama-keep-alive", strOr(cfg.OllamaKeepAlive, ollama.DefaultKeepAlive), "how long Ollama keeps the gloss model loaded after a lookup -- a duration, seconds, 0 to unload immediately, or a negative value to keep it loaded indefinitely")
 	root.PersistentFlags().BoolVar(&noGloss, "no-gloss", cfg.NoGloss, "skip Ollama gloss lookups")
+	root.PersistentFlags().BoolVar(&launchAnki, "launch-anki", cfg.LaunchAnki, "start the Anki desktop app if AnkiConnect isn't answering (local AnkiConnect URLs only; macOS and Linux)")
 
 	root.AddCommand(newInstallCmd(cfg))
 	root.AddCommand(newKindleCmd(cfg))

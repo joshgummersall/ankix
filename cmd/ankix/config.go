@@ -28,6 +28,11 @@ type config struct {
 	// on the next rebuild.
 	BaseModel string `toml:"base_model"`
 	NoGloss   bool   `toml:"no_gloss"`
+	// LaunchAnki starts the Anki desktop app when AnkiConnect isn't
+	// answering. It's off unless asked for: opening a GUI app is the kind
+	// of thing to opt into once, in this file, rather than have every
+	// command decide on its own.
+	LaunchAnki bool `toml:"launch_anki"`
 	// Lang is the target language being studied. It seeds Kindle's --lang
 	// filter and YouTube's --sub-lang unless a command-specific value below
 	// overrides it.

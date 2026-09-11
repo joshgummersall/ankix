@@ -14,6 +14,7 @@ import (
 )
 
 func runFileOpen(f *fileFlags, path string) error {
+	startAnki()
 	provider, err := newDictProvider()
 	if err != nil {
 		return err
@@ -39,7 +40,10 @@ func runFileOpen(f *fileFlags, path string) error {
 }
 
 func launchFileTUI(f *fileFlags, provider dict.Provider, doc *tui.Document, title string) error {
-	client := anki.New(ankiConnectURL)
+	client, err := newAnkiClient()
+	if err != nil {
+		return err
+	}
 	if names, err := client.ModelNames(); err == nil {
 		found := false
 		for _, n := range names {
@@ -65,6 +69,6 @@ func launchFileTUI(f *fileFlags, provider dict.Provider, doc *tui.Document, titl
 	})
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
-	_, err := p.Run()
+	_, err = p.Run()
 	return err
 }

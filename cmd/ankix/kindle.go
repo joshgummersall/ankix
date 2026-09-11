@@ -64,6 +64,8 @@ func newKindleVocabCmd(cfg config) *cobra.Command {
 }
 
 func runSync(o *syncOptions) (err error) {
+	startAnki()
+
 	model, err := resolveModel(ollamaURL, ollamaModel)
 	if err != nil {
 		return err
@@ -106,7 +108,10 @@ func runSync(o *syncOptions) (err error) {
 		words = words[:o.limit]
 	}
 
-	client := anki.New(ankiConnectURL)
+	client, err := newAnkiClient()
+	if err != nil {
+		return err
+	}
 
 	if !o.headless {
 		return runKindleReview(o, db, client, provider, seen, words)

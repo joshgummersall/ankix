@@ -28,7 +28,8 @@ brew install --cask joshgummersall/ankix/ankix
 - [Ollama](https://ollama.com/) — the `kindle`, `youtube`, and `web` commands
   all use the same `ankix` model (`ollama/vocab/Modelfile`)
 - [Anki](https://apps.ankiweb.net/) running with the [AnkiConnect](https://ankiweb.net/shared/info/2055492159)
-  add-on installed (Tools → Add-ons → Get Add-ons..., code `2055492159`, then restart Anki)
+  add-on installed (Tools → Add-ons → Get Add-ons..., code `2055492159`, then restart Anki) —
+  ankix can start it for you, see [Starting Anki](#starting-anki)
 - `yt-dlp` for the `youtube` command
 
 After installing, build the local Ollama model once:
@@ -77,6 +78,7 @@ ollama_model = "ankix"  # the model ankix install builds and every command looks
 base_model = "llama3.2:3b"  # what ankix install builds that model FROM
 ollama_keep_alive = "30m"   # how long Ollama holds the model in memory after a lookup
 no_gloss = false
+launch_anki = false  # start the Anki app when AnkiConnect isn't answering
 lang = "es"          # seeds --lang (kindle) and --sub-lang (youtube)
 
 [kindle]
@@ -245,6 +247,25 @@ a duration like `1h`, a number of seconds, `0` to unload as soon as each
 reply is sent, or a negative value to keep the model loaded indefinitely.
 Longer keeps memory occupied after ankix exits; shorter gives it back sooner
 at the cost of reloading.
+
+## Starting Anki
+
+Every command ends at Anki, and Anki has to already be running for
+AnkiConnect to answer. By default ankix says so and stops. With
+`--launch-anki` (or `launch_anki = true` in the config file) it starts the
+app instead when AnkiConnect doesn't answer.
+
+It's the same trick as the model warm-up above: the launch goes out in the
+background at the start of the command, so Anki opens its collection while
+ankix is still downloading subtitles or fetching an article, and the review
+screen waits only for whatever is left. Anki starts in the background on
+macOS, so it doesn't steal the terminal; it's left running when ankix exits,
+because it's your app, not a subprocess.
+
+Two things it won't do. A non-local `ankiconnect-url` is someone else's
+machine, so it reports that rather than opening a local Anki you aren't
+pointed at. And on Windows there's no dependable way to find the app, so it
+asks you to start Anki yourself.
 
 ## Fixing a translation
 

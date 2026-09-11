@@ -18,6 +18,7 @@ func formatTS(d time.Duration) string {
 }
 
 func runFetch(f *youtubeFlags, url string) error {
+	startAnki()
 	provider, err := newDictProvider()
 	if err != nil {
 		return err
@@ -46,6 +47,7 @@ func runFetch(f *youtubeFlags, url string) error {
 }
 
 func runReview(f *youtubeFlags, path string) error {
+	startAnki()
 	provider, err := newDictProvider()
 	if err != nil {
 		return err
@@ -62,7 +64,10 @@ func runReview(f *youtubeFlags, path string) error {
 }
 
 func launchYouTubeTUI(f *youtubeFlags, provider dict.Provider, transcript *subtitle.Transcript, title string) error {
-	client := anki.New(ankiConnectURL)
+	client, err := newAnkiClient()
+	if err != nil {
+		return err
+	}
 	if names, err := client.ModelNames(); err == nil {
 		found := false
 		for _, n := range names {
@@ -98,6 +103,6 @@ func launchYouTubeTUI(f *youtubeFlags, provider dict.Provider, transcript *subti
 	})
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
-	_, err := p.Run()
+	_, err = p.Run()
 	return err
 }

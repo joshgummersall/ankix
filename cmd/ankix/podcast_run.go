@@ -13,6 +13,7 @@ import (
 )
 
 func runPodcastAppleFetch(url string) error {
+	startAnki()
 	provider, err := newDictProvider()
 	if err != nil {
 		return err
@@ -54,7 +55,10 @@ func runPodcastAppleFetch(url string) error {
 }
 
 func launchPodcastTUI(provider dict.Provider, cues []subtitle.Cue, title, audioURL string) error {
-	client := anki.New(ankiConnectURL)
+	client, err := newAnkiClient()
+	if err != nil {
+		return err
+	}
 	if names, err := client.ModelNames(); err == nil {
 		found := false
 		for _, n := range names {
@@ -92,6 +96,6 @@ func launchPodcastTUI(provider dict.Provider, cues []subtitle.Cue, title, audioU
 	})
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
-	_, err := p.Run()
+	_, err = p.Run()
 	return err
 }

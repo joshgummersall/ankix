@@ -172,18 +172,8 @@ func (m *KindleModel) loadGroup(groupIdx int) tea.Cmd {
 	m.sentence = m.groups[groupIdx].Usage
 	m.resetPhrasesForSentence()
 	m.state = kPicking
-	m.setStatus(m.pickingStatus(), false)
+	m.setStatus("", false)
 	return m.refreshDefinitions()
-}
-
-func (m *KindleModel) pickingStatus() string {
-	cards := m.ps.countIncluded()
-	word := "card"
-	if cards != 1 {
-		word = "cards"
-	}
-	return fmt.Sprintf("sentence %d/%d — %d %s will be added",
-		m.groupIdx+1, len(m.groups), cards, word)
 }
 
 // addPhraseAtCursor adds a new single-word phrase for the word under the
@@ -212,6 +202,13 @@ func (m *KindleModel) tokenCursorFor(start int) int {
 		}
 	}
 	return 0
+}
+
+// progressText is the dim header readout of how far this review has got,
+// mirroring Model.progressText for documents. It is the only place the
+// sentence count appears — the status line below is for transient messages.
+func (m KindleModel) progressText() string {
+	return fmt.Sprintf("sentence %d/%d", m.groupIdx+1, len(m.groups))
 }
 
 func (m *KindleModel) setStatus(s string, isErr bool) {
@@ -316,11 +313,11 @@ func (m KindleModel) handlePickingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.ps.beginExpand(m.newEntryAtCursor())
 		m.state = kExpanding
-		m.setStatus(m.pickingStatus(), false)
+		m.setStatus("", false)
 		return m, m.ps.debounceRefresh()
 	case "d":
 		m.ps.deleteNearestPhrase()
-		m.setStatus(m.pickingStatus(), false)
+		m.setStatus("", false)
 		return m, nil
 	case "e":
 		return m, m.enterEditSentence()
@@ -341,7 +338,7 @@ func (m KindleModel) handleExpandingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	case expandConfirmed, expandCanceled:
 		m.state = kPicking
-		m.setStatus(m.pickingStatus(), false)
+		m.setStatus("", false)
 		return m, m.refreshDefinitions()
 	}
 	return m, nil
@@ -399,7 +396,7 @@ func (m KindleModel) handleEditSentenceKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 	case "esc":
 		m.sentenceInput.Blur()
 		m.state = kPicking
-		m.setStatus(m.pickingStatus(), false)
+		m.setStatus("", false)
 		return m, nil
 	case "enter":
 		cmd := m.applyEditedSentence(m.sentenceInput.Value())
@@ -424,7 +421,7 @@ func (m *KindleModel) applyEditedSentence(edited string) tea.Cmd {
 		m.resetPhrasesForSentence()
 	}
 	m.state = kPicking
-	m.setStatus(m.pickingStatus(), false)
+	m.setStatus("", false)
 	return m.refreshDefinitions()
 }
 
@@ -434,10 +431,12 @@ func (m KindleModel) View() string {
 	}
 
 	group := m.groups[m.groupIdx]
-	header := titleStyle.Render(fmt.Sprintf("ankix review — sentence %d/%d", m.groupIdx+1, len(m.groups)))
+	title := "ankix review"
 	if len(group.Entries) > 0 && group.Entries[0].BookTitle != "" {
-		header += "  " + helpStyle.Render(group.Entries[0].BookTitle)
+		title = group.Entries[0].BookTitle
 	}
+	header := titleStyle.Render(title) +
+		"  " + helpStyle.Render(m.progressText())
 
 	var body string
 	switch m.state {
@@ -472,6 +471,14 @@ func (m KindleModel) renderKindlePicker() string {
 
 	var b strings.Builder
 	b.WriteString(m.ps.render(m.sentence))
+
+	cards := m.ps.countIncluded()
+	word := "card"
+	if cards != 1 {
+		word = "cards"
+	}
+	b.WriteString("\n\n")
+	b.WriteString(helpStyle.Render(fmt.Sprintf("%d %s will be added, deck: %s", cards, word, m.cfg.Deck)))
 
 	if m.cfg.Dict != nil {
 		b.WriteString("\n\n")

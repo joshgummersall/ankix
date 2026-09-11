@@ -121,7 +121,7 @@ func (m KindleModel) handleRefineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		m.refineInput.Blur()
 		m.state = kPicking
-		m.setStatus(m.pickingStatus(), false)
+		m.setStatus("", false)
 		return m, nil
 	case "enter":
 		cmd := m.submitRefine()
@@ -137,7 +137,7 @@ func (m *KindleModel) submitRefine() tea.Cmd {
 	m.state = kPicking
 	instruction := strings.TrimSpace(m.refineInput.Value())
 	if instruction == "" {
-		m.setStatus(m.pickingStatus(), false)
+		m.setStatus("", false)
 		return nil
 	}
 	r, ok := refineAvailable(m.cfg.Dict)
