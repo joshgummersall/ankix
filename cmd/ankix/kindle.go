@@ -56,7 +56,7 @@ func newKindleVocabCmd(cfg config) *cobra.Command {
 	cmd.Flags().BoolVar(&o.dryRun, "dry-run", false, "print what would be synced without writing to Anki (only applies with --headless; the interactive review lets you inspect/skip each word before it's added)")
 	cmd.Flags().IntVar(&o.limit, "limit", 0, "limit to the N most recently looked-up words (0 for no limit)")
 	cmd.Flags().BoolVar(&o.headless, "headless", false, "sync every word straight through without the interactive review TUI (e.g. for cron/automation)")
-	cmd.Flags().BoolVar(&o.eject, "eject", false, "eject the Kindle's volume after a successful sync (macOS only)")
+	cmd.Flags().BoolVar(&o.eject, "eject", cfg.Kindle.Eject, "eject the Kindle's volume after a successful sync (macOS only)")
 
 	cmd.AddCommand(newKindleVocabDbCmd())
 

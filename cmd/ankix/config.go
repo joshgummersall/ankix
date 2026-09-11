@@ -40,6 +40,10 @@ type config struct {
 
 	Kindle struct {
 		Lang string `toml:"lang"`
+		// Eject unmounts the Kindle's volume after a successful sync. It's
+		// a property of how you sync — plugged in over USB, then unplugged
+		// — rather than of a single run, so it's worth setting once here.
+		Eject bool `toml:"eject"`
 	} `toml:"kindle"`
 
 	YouTube struct {

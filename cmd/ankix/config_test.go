@@ -169,3 +169,31 @@ func TestLoadConfigFrom_ReadsBaseModel(t *testing.T) {
 		t.Errorf("BaseModel = %q, want %q", cfg.BaseModel, "qwen2.5:14b")
 	}
 }
+
+// Ejecting is a property of how you sync (plugged in over USB, then
+// unplugged), not of a single run, so `[kindle].eject` has to seed the flag
+// default.
+func TestKindleVocabCmd_EjectDefaultsToTheConfiguredValue(t *testing.T) {
+	var cfg config
+	cfg.Kindle.Eject = true
+
+	if got := newKindleVocabCmd(cfg).Flags().Lookup("eject").DefValue; got != "true" {
+		t.Errorf("--eject default = %q, want %q", got, "true")
+	}
+	if got := newKindleVocabCmd(config{}).Flags().Lookup("eject").DefValue; got != "false" {
+		t.Errorf("--eject default = %q with no config, want %q", got, "false")
+	}
+}
+
+func TestLoadConfigFrom_ReadsKindleEject(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	writeFile(t, path, "[kindle]\neject = true\n")
+
+	cfg, err := loadConfigFrom(path)
+	if err != nil {
+		t.Fatalf("loadConfigFrom() error = %v", err)
+	}
+	if !cfg.Kindle.Eject {
+		t.Error("Kindle.Eject = false, want true")
+	}
+}
