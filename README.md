@@ -83,6 +83,7 @@ lang = "es"          # seeds --lang (kindle) and --sub-lang (youtube)
 
 [kindle]
 lang = "es"           # overrides the top-level lang for kindle only
+eject = true          # eject the Kindle's volume after a successful sync (macOS only)
 
 [youtube]
 sub_lang = "es"        # overrides the top-level lang for youtube only
@@ -147,14 +148,13 @@ Flags:
 - `--limit` — only the N most recently looked-up words (0 for no limit)
 - `--headless` — sync straight through, skipping the interactive review
 - `--dry-run` — preview without writing to Anki (only with `--headless`)
-- `--eject` — eject the Kindle's volume after a successful sync (macOS only)
+- `--eject` — eject the Kindle's volume after a successful sync (macOS only; or `[kindle].eject` in the config file)
 - `--ankiconnect-url` — AnkiConnect endpoint (default `http://localhost:8765`)
 
 Only words not already marked Mastered in `vocab.db` are considered, and any
 word that ends up in Anki (added, or already there) is marked Mastered (sets
 `WORDS.category` to `1`), removing it from the Kindle's Vocabulary Builder
-review queue — that's what tracks sync progress across runs, no separate
-watermark is kept. This opens `vocab.db` read-write (except for a headless
+review queue. This opens `vocab.db` read-write (except for a headless
 `--dry-run`), so point it at the device itself rather than a copy if you want
 the change to take effect on the device. Before writing anything, `vocab.db`
 is snapshotted into a timestamped backup log under
@@ -164,6 +164,30 @@ snapshots and `ankix kindle vocab db restore <vocab.db> <index>` to roll
 back to one (which itself snapshots the current file first, so a restore is
 always undoable).
 
+Sync progress itself is tracked separately, in `imported.jsonl` under
+`$XDG_CONFIG_HOME/ankix` (or the OS equivalent): every word a review
+finishes with — added, already in Anki, or skipped — is appended there,
+keyed by its `vocab.db` word id. The Mastered flag alone is not enough to
+track progress, because the Kindle resets it: in one observed case 58 words
+marked Mastered by a sync were back in the review queue eight days later,
+having been looked up again exactly once between them, which put
+already-imported sentences back in front of you.
+
+The log is created on first sync and seeded from every word already marked
+Mastered, in `vocab.db` and in its backups — a backup taken right after a
+sync being the only surviving record of the words that sync retired.
+
+```sh
+ankix kindle vocab imported status                    # path and word count
+ankix kindle vocab imported mark-all <vocab.db>       # retire the whole file
+```
+
+`mark-all` records every word currently in `vocab.db` as imported, whether
+or not it ever reached Anki — a clean slate, after importing outside `ankix`
+or when the Kindle has reset flags on words you know you already have. It's
+append-only JSON Lines, so to put words back in the queue, delete their
+lines (each carries the `outcome` that added it, `mark-all` included).
+
 The namespace is keyed by the `vocab.db` **path** you pass in, not the
 device itself — `vocab.db` has no serial number or account ID to key off.
 If the same Kindle ever mounts at a different path, or you copy `vocab.db`
@@ -171,9 +195,8 @@ somewhere new, `list`/`restore` will see it as an unrelated file and start a
 fresh backup history rather than continuing the old one. Always point
 `list`/`restore` at the same path you've been syncing that device with.
 
-Re-running `sync` checks AnkiConnect for an existing note with a matching
-headword in the target deck to skip words already synced, so it's safe to
-re-run.
+A headless re-run also checks AnkiConnect for an existing note with a
+matching headword in the target deck, so it's safe to re-run.
 
 Definitions are hydrated through the `dict.Provider` interface
 (`internal/dict/dict.go`), so other sources can be added later without

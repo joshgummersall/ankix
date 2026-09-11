@@ -59,6 +59,7 @@ func newKindleVocabCmd(cfg config) *cobra.Command {
 	cmd.Flags().BoolVar(&o.eject, "eject", cfg.Kindle.Eject, "eject the Kindle's volume after a successful sync (macOS only)")
 
 	cmd.AddCommand(newKindleVocabDbCmd())
+	cmd.AddCommand(newKindleVocabImportedCmd())
 
 	return cmd
 }
@@ -86,17 +87,35 @@ func runSync(o *syncOptions) (err error) {
 	}
 	// Registered before db.Close so it runs after (defers are LIFO), and
 	// only ejects once the volume's file is safely closed and the sync
-	// itself succeeded.
+	// itself succeeded. A dry run never ejects: it is the one run you make
+	// to see what would happen, so it must leave the Kindle mounted —
+	// ejecting drops the device out of USB drive mode entirely, which takes
+	// a physical replug to undo.
 	defer func() {
-		if err == nil && o.eject {
+		if err == nil && o.eject && !o.dryRun {
 			err = ejectVolume(o.dbPath)
 		}
 	}()
 	defer db.Close()
 
+	// The import log is what actually keeps reviewed words from coming back:
+	// vocab.db's own Mastered flag is reset by the Kindle on its own (see
+	// kindle.ImportLog), which puts already-imported sentences back in the
+	// review queue.
+	// A dry run reads the log but never writes to it, seeding included.
+	log, err := openImportLog(o.dbPath, db, !(o.headless && o.dryRun))
+	if err != nil {
+		return err
+	}
+	defer log.Close()
+
 	entries, err := kindle.Entries(db, o.lang, false)
 	if err != nil {
 		return err
+	}
+	entries, alreadyImported := kindle.FilterImported(entries, log)
+	if alreadyImported > 0 {
+		fmt.Printf("skipping %d lookup(s) already imported\n", alreadyImported)
 	}
 	if len(entries) == 0 {
 		fmt.Println("no new vocab entries found for the given language")
@@ -114,7 +133,7 @@ func runSync(o *syncOptions) (err error) {
 	}
 
 	if !o.headless {
-		return runKindleReview(o, db, client, provider, seen, words)
+		return runKindleReview(o, db, log, client, provider, seen, words)
 	}
 
 	if !o.dryRun {
@@ -134,7 +153,7 @@ func runSync(o *syncOptions) (err error) {
 		if exists {
 			skippedExisting++
 			if !o.dryRun {
-				if err := kindle.MarkMastered(db, e.ID); err != nil {
+				if err := finishEntry(db, log, e, "duplicate"); err != nil {
 					return err
 				}
 			}
@@ -149,7 +168,7 @@ func runSync(o *syncOptions) (err error) {
 			skippedNoDefinition++
 			fmt.Printf("skip %q: no definition found\n", e.Word)
 			if !o.dryRun {
-				if err := kindle.MarkMastered(db, e.ID); err != nil {
+				if err := finishEntry(db, log, e, "no-definition"); err != nil {
 					return err
 				}
 			}
@@ -173,7 +192,7 @@ func runSync(o *syncOptions) (err error) {
 			}
 			return fmt.Errorf("add note %q: %w", e.Word, err)
 		}
-		if err := kindle.MarkMastered(db, e.ID); err != nil {
+		if err := finishEntry(db, log, e, "added"); err != nil {
 			return err
 		}
 		fmt.Printf("added %q\n", e.Word)
@@ -211,6 +230,38 @@ func ejectVolume(path string) error {
 	return nil
 }
 
+// openImportLog opens ankix's durable record of reviewed words, seeding it
+// the first time from every word already marked Mastered — in the live
+// vocab.db and in its backups, which are the only surviving record of syncs
+// whose Mastered flags the Kindle has since reset.
+func openImportLog(dbPath string, db *sql.DB, seed bool) (*kindle.ImportLog, error) {
+	path, err := kindle.DefaultImportLogPath()
+	if err != nil {
+		return nil, err
+	}
+	log, err := kindle.OpenImportLog(path)
+	if err != nil {
+		return nil, err
+	}
+	if seed && log.Len() == 0 {
+		seeded, err := kindle.SeedImportLog(log, dbPath, db)
+		if err != nil {
+			return nil, err
+		}
+		fmt.Printf("seeded import log with %d already-mastered word(s): %s\n", seeded, log.Path())
+	}
+	return log, nil
+}
+
+// finishEntry retires e from review the same way the interactive TUI does:
+// Mastered in vocab.db, and recorded in the durable import log.
+func finishEntry(db *sql.DB, log *kindle.ImportLog, e kindle.Entry, outcome string) error {
+	if err := kindle.MarkMastered(db, e.ID); err != nil {
+		return err
+	}
+	return log.Record(e, deck, outcome)
+}
+
 func noteExists(client *anki.Client, deck, phrase string) (bool, error) {
 	query := fmt.Sprintf(`deck:%q Front:%q`, deck, "<b>"+phrase+"</b>*")
 	ids, err := client.FindNotes(query)
@@ -238,7 +289,7 @@ func dedupeEntries(entries []kindle.Entry) (seen map[string]kindle.Entry, words 
 // usage sentence and the highlighted word/phrase adjusted (e.g. to capture a
 // reflexive form or multi-word phrase Kindle's own lookup can't select)
 // before syncing to Anki.
-func runKindleReview(o *syncOptions, db *sql.DB, client *anki.Client, provider *ollama.Provider, seen map[string]kindle.Entry, words []string) error {
+func runKindleReview(o *syncOptions, db *sql.DB, log *kindle.ImportLog, client *anki.Client, provider *ollama.Provider, seen map[string]kindle.Entry, words []string) error {
 	entries := make([]kindle.Entry, len(words))
 	for i, key := range words {
 		entries[i] = seen[key]
@@ -251,6 +302,7 @@ func runKindleReview(o *syncOptions, db *sql.DB, client *anki.Client, provider *
 		AnkiClient: client,
 		Dict:       provider,
 		DB:         db,
+		ImportLog:  log,
 		Templates:  cardTemplates,
 	})
 

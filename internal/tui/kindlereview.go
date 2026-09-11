@@ -40,6 +40,17 @@ type KindleConfig struct {
 	// DB, if non-nil, is a read-write vocab.db handle used to mark synced
 	// words as Mastered.
 	DB *sql.DB
+
+	// ImportLog, if non-nil, durably records every word this review
+	// finishes with — added, already in Anki, or skipped — so it stays out
+	// of future reviews even when the Kindle resets its own Mastered flag
+	// (see kindle.ImportLog).
+	ImportLog importLog
+}
+
+// importLog is the slice of *kindle.ImportLog this model needs.
+type importLog interface {
+	Record(e kindle.Entry, deck, outcome string) error
 }
 
 // kindleSelection is one accepted word/phrase, resolved to byte offsets in
@@ -553,8 +564,8 @@ type kindleBatchSubmitResultMsg struct {
 }
 
 // kindleBatchSubmitCmd adds one note per selection to Anki (skipping any
-// whose phrase already has a note in the deck), marking each word Mastered
-// in vocab.db as it's added, found to already exist, or explicitly deleted
+// whose phrase already has a note in the deck), retiring each word (see
+// finishEntry) as it's added, found to already exist, or explicitly deleted
 // from review (skipped) — every word the user has reviewed is done with,
 // regardless of whether it became a card.
 func kindleBatchSubmitCmd(cfg KindleConfig, sentence string, sels []kindleSelection, skipped []kindle.Entry) tea.Cmd {
@@ -566,7 +577,7 @@ func kindleBatchSubmitCmd(cfg KindleConfig, sentence string, sels []kindleSelect
 		}
 
 		for _, e := range skipped {
-			if err := markMastered(cfg, e); err != nil {
+			if err := finishEntry(cfg, e, "skipped"); err != nil {
 				return kindleBatchSubmitResultMsg{skipped: len(skipped), err: err}
 			}
 		}
@@ -585,14 +596,16 @@ func kindleBatchSubmitCmd(cfg KindleConfig, sentence string, sels []kindleSelect
 			if err != nil && !duplicate {
 				return kindleBatchSubmitResultMsg{added: added, duplicates: duplicates, err: err}
 			}
+			outcome := "added"
 			if duplicate {
 				duplicates++
+				outcome = "duplicate"
 			} else {
 				added++
 			}
 
 			for _, e := range sel.entries {
-				if err := markMastered(cfg, e); err != nil {
+				if err := finishEntry(cfg, e, outcome); err != nil {
 					return kindleBatchSubmitResultMsg{added: added, duplicates: duplicates, err: err}
 				}
 			}
@@ -602,11 +615,21 @@ func kindleBatchSubmitCmd(cfg KindleConfig, sentence string, sels []kindleSelect
 	}
 }
 
-// markMastered marks e Mastered in vocab.db. Manually-added words (see
-// addPhraseAtCursor) have no vocab.db row, so there's nothing to mark.
-func markMastered(cfg KindleConfig, e kindle.Entry) error {
-	if cfg.DB == nil || e.ID == "" {
+// finishEntry retires e from review: Mastered in vocab.db, so the Kindle
+// stops quizzing it, and written to the import log, so ankix keeps skipping
+// it even after the Kindle resets that flag. Manually-added words (see
+// addPhraseAtCursor) have no vocab.db row, so there's nothing to record.
+func finishEntry(cfg KindleConfig, e kindle.Entry, outcome string) error {
+	if e.ID == "" {
 		return nil
 	}
-	return kindle.MarkMastered(cfg.DB, e.ID)
+	if cfg.DB != nil {
+		if err := kindle.MarkMastered(cfg.DB, e.ID); err != nil {
+			return err
+		}
+	}
+	if cfg.ImportLog == nil {
+		return nil
+	}
+	return cfg.ImportLog.Record(e, cfg.Deck, outcome)
 }

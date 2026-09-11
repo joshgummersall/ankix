@@ -61,16 +61,25 @@ func OpenRW(path string) (*sql.DB, error) {
 	return db, nil
 }
 
-// backupRoot is the durable directory every vocab.db's backup log lives
-// under, namespaced per source file by sourceDir. It's rooted at the user's
-// config directory (not a cache directory) since backups are meant to
-// survive OS cache cleanup.
-func backupRoot() (string, error) {
+// configRoot is ankix's own durable state directory. It's the user's config
+// directory (not a cache directory) since what lives here — vocab.db
+// backups, the import log — is meant to survive OS cache cleanup.
+func configRoot() (string, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		dir = os.TempDir()
 	}
-	return filepath.Join(dir, "ankix", "kindle-backups"), nil
+	return filepath.Join(dir, "ankix"), nil
+}
+
+// backupRoot is the durable directory every vocab.db's backup log lives
+// under, namespaced per source file by sourceDir.
+func backupRoot() (string, error) {
+	root, err := configRoot()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(root, "kindle-backups"), nil
 }
 
 // sourceDir returns the backup directory for path, keyed by a hash of its
@@ -268,4 +277,94 @@ func Entries(db *sql.DB, lang string, includeMastered bool) ([]Entry, error) {
 		entries = append(entries, e)
 	}
 	return entries, rows.Err()
+}
+
+// MasteredIDs returns the id of every word in db marked Mastered.
+func MasteredIDs(db *sql.DB) ([]string, error) {
+	return wordIDs(db, `SELECT id FROM WORDS WHERE category = ?`, masteredCategory)
+}
+
+// AllWords returns every word in db, whatever its category, as Entries
+// carrying only an id and the word itself — enough to record in the import
+// log, not enough to build a card from.
+func AllWords(db *sql.DB) ([]Entry, error) {
+	rows, err := db.Query(`SELECT id, word FROM WORDS`)
+	if err != nil {
+		return nil, fmt.Errorf("query words: %w", err)
+	}
+	defer rows.Close()
+
+	var entries []Entry
+	for rows.Next() {
+		var e Entry
+		if err := rows.Scan(&e.ID, &e.Word); err != nil {
+			return nil, fmt.Errorf("scan word: %w", err)
+		}
+		entries = append(entries, e)
+	}
+	return entries, rows.Err()
+}
+
+func wordIDs(db *sql.DB, query string, args ...any) ([]string, error) {
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query words: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan word: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// SeedImportLog backfills l from the words already marked Mastered in db
+// and in every backup of it, so a log created after words were already
+// synced doesn't re-review them. The backups matter as much as the live
+// file: the Kindle resets words out of Mastered on its own (see ImportLog),
+// and a backup taken right after a sync is the only surviving record that
+// those words were ever synced. Returns how many ids it added.
+//
+// Seeding treats any Mastered word as reviewed, including words mastered on
+// the Kindle itself rather than by ankix — a word the user has retired from
+// the device's own quizzing is one they're done with either way.
+func SeedImportLog(l *ImportLog, path string, db *sql.DB) (int, error) {
+	if l == nil {
+		return 0, nil
+	}
+	before := l.Len()
+
+	ids, err := MasteredIDs(db)
+	if err != nil {
+		return 0, err
+	}
+	if err := l.RecordIDs(ids, "seed-mastered"); err != nil {
+		return 0, err
+	}
+
+	backups, err := ListBackups(path)
+	if err != nil {
+		return 0, err
+	}
+	for _, b := range backups {
+		old, err := Open(b.Path)
+		if err != nil {
+			continue // an unreadable backup is not worth failing a sync over
+		}
+		ids, err := MasteredIDs(old)
+		old.Close()
+		if err != nil {
+			continue
+		}
+		if err := l.RecordIDs(ids, "seed-backup"); err != nil {
+			return 0, err
+		}
+	}
+
+	return l.Len() - before, nil
 }
