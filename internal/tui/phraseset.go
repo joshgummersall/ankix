@@ -94,7 +94,8 @@ type phrase[T any] struct {
 	// an ordinary lookup still in flight for the same text would otherwise
 	// land on top of it.
 	previewGen int
-	// refined marks a preview the user corrected by hand (see startRefine).
+	// refined marks a preview the user corrected by hand (see startRefine
+	// and setPreview).
 	// refreshPreviews leaves those alone, so re-scoping a *neighbouring*
 	// phrase — or cancelling an expansion, which reverts lo/hi but not
 	// previewText — can't quietly re-fetch a plain lookup over a
@@ -526,6 +527,34 @@ func (ps *phraseSet[T]) beginRefine() (idx int, why string) {
 		return -1, "nothing to refine — this word has no translation yet"
 	}
 	return i, ""
+}
+
+// beginEdit reports the phrase under the cursor as the target of a hand
+// edit of its preview, or a reason it can't be one. Unlike beginRefine, an
+// empty or failed lookup is fine — the user can type the answer in — but a
+// lookup still in flight would land on top of the edit.
+func (ps *phraseSet[T]) beginEdit() (idx int, why string) {
+	i, ok := ps.phraseAtCursor()
+	if !ok {
+		return -1, "put the cursor on a marked word first"
+	}
+	if ps.phrases[i].previewPending {
+		return -1, "wait for the lookup to finish"
+	}
+	return i, ""
+}
+
+// setPreview replaces phrases[i]'s preview with text the user typed. It is
+// marked refined so refreshPreviews doesn't re-fetch over it. The lemma is
+// kept: it describes the phrase, not the wording of the answer.
+func (ps *phraseSet[T]) setPreview(i int, text string) {
+	if i < 0 || i >= len(ps.phrases) {
+		return
+	}
+	p := &ps.phrases[i]
+	p.preview = text
+	p.previewErr = nil
+	p.refined = true
 }
 
 // applyPreview records a finished lookup against phrases[idx]. gen is the

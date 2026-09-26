@@ -6,7 +6,6 @@ package tui
 import (
 	"fmt"
 
-	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -24,8 +23,8 @@ const (
 	stateVisual
 	stateWordPick
 	stateWordExpand
-	stateEditSentence
 	stateRefine
+	stateEditGloss
 	stateSubmitting
 )
 
@@ -75,14 +74,18 @@ type Model struct {
 
 	selWordStart, selWordEnd int // confirmed word selection, inclusive
 
-	sentence      string
-	sentenceInput textarea.Model // pre-filled with sentence while editing, for fixing typos; wraps long lines
-	ps            phraseSet[struct{}]
+	sentence string
+	ps       phraseSet[struct{}]
 
 	// refineInput collects a free-form correction for the gloss of
 	// phrases[refineIdx] — see enterRefine.
 	refineInput textinput.Model
 	refineIdx   int
+
+	// glossInput edits the back of phrases[glossIdx] by hand — see
+	// enterEditGloss.
+	glossInput textinput.Model
+	glossIdx   int
 
 	selLineIndex int // line the current sentence was picked from, passed to Config.BuildNote/PreviewLink
 
@@ -95,12 +98,6 @@ type Model struct {
 func New(cfg Config) Model {
 	si := textinput.New()
 	si.Prompt = "/"
-
-	sei := textarea.New()
-	sei.Prompt = "edit: "
-	sei.ShowLineNumbers = false
-	sei.SetWidth(120)
-	sei.SetHeight(3)
 
 	words := flattenWords(cfg.Document.Lines)
 	lineFirstWord := make([]int, len(cfg.Document.Lines))
@@ -116,8 +113,8 @@ func New(cfg Config) Model {
 		cfg:           cfg,
 		state:         stateBrowse,
 		searchInput:   si,
-		sentenceInput: sei,
 		refineInput:   newRefineInput(),
+		glossInput:    newGlossInput(),
 		cardedWords:   make(map[int]bool),
 		words:         words,
 		lineFirstWord: lineFirstWord,
@@ -164,8 +161,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport.Width = msg.Width
 			m.viewport.Height = vpHeight
 		}
-		m.sentenceInput.SetWidth(msg.Width)
 		m.refineInput.Width = msg.Width
+		m.glossInput.Width = msg.Width
 		m.syncViewport()
 		return m, nil
 
@@ -242,10 +239,8 @@ func (m Model) View() string {
 
 	var body string
 	switch m.state {
-	case stateWordPick, stateWordExpand, stateRefine, stateSubmitting:
+	case stateWordPick, stateWordExpand, stateRefine, stateEditGloss, stateSubmitting:
 		body = m.renderWordPicker()
-	case stateEditSentence:
-		body = m.renderEditSentence()
 	default:
 		// Content is kept in sync by syncViewport (called from Update, not
 		// here — View has a value receiver, so mutating m.viewport here
@@ -253,7 +248,7 @@ func (m Model) View() string {
 		body = m.viewport.View()
 	}
 
-	if (m.state == stateWordPick || m.state == stateWordExpand || m.state == stateRefine || m.state == stateSubmitting) && m.width > 0 {
+	if (m.state == stateWordPick || m.state == stateWordExpand || m.state == stateRefine || m.state == stateEditGloss || m.state == stateSubmitting) && m.width > 0 {
 		body = lipgloss.NewStyle().Width(m.width).Render(body)
 	}
 
@@ -261,7 +256,7 @@ func (m Model) View() string {
 	if m.statusErr {
 		statusLine = errStatusStyle
 	}
-	footer := statusLine.Render(m.status) + "\n" + helpStyle.Render(m.helpText())
+	footer := statusLine.Render(m.status) + "\n" + m.modeBadge() + helpStyle.Render(m.helpText())
 
 	view := header + "\n" + body + "\n" + footer
 
@@ -279,7 +274,7 @@ func (m Model) View() string {
 // and the two keys that do work are named outright.
 func (m Model) helpText() string {
 	switch m.state {
-	case stateEditSentence:
+	case stateEditGloss:
 		return "enter save  esc discard"
 	case stateRefine:
 		return "enter apply  esc cancel"
@@ -290,9 +285,9 @@ func (m Model) helpText() string {
 	}
 }
 
-// helpSections is the modal's content for this model, with the refine keys
-// included only when the configured dict can actually refine.
+// helpSections is the modal's content for this model, with the card back
+// and refine keys included only when they actually work.
 func (m Model) helpSections() []helpSection {
 	_, refine := refineAvailable(m.cfg.Dict)
-	return documentHelpSections(refine)
+	return documentHelpSections(m.cfg.Dict != nil, refine)
 }

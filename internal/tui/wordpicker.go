@@ -56,7 +56,7 @@ func (m Model) handleWordPickKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.ps.moveCursorNextPhrase()
 		return m, nil
 	case "e":
-		return m, m.enterEditSentence()
+		return m, m.enterEditGloss()
 	case "r":
 		cmd := m.enterRefine()
 		return m, cmd
@@ -119,10 +119,6 @@ func (m Model) handleWordExpandKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) renderEditSentence() string {
-	return "\n" + helpStyle.Render("fix typos in the sentence, then confirm") + "\n\n" + m.sentenceInput.View() + "\n"
-}
-
 func (m Model) renderWordPicker() string {
 	var b strings.Builder
 	b.WriteString(m.ps.render(m.sentence))
@@ -147,6 +143,9 @@ func (m Model) renderWordPicker() string {
 
 	if m.state == stateRefine && m.refineIdx < len(m.ps.phrases) {
 		b.WriteString(renderRefinePrompt(m.ps.phraseText(m.sentence, m.ps.phrases[m.refineIdx]), m.refineInput))
+	}
+	if m.state == stateEditGloss && m.glossIdx < len(m.ps.phrases) {
+		b.WriteString(renderGlossEditor(m.ps.phraseText(m.sentence, m.ps.phrases[m.glossIdx]), m.glossInput))
 	}
 
 	if m.state == stateSubmitting {

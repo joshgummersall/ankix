@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -21,8 +20,8 @@ type kState int
 const (
 	kPicking kState = iota
 	kExpanding
-	kEditSentence
 	kRefine
+	kEditGloss
 	kSubmitting
 	kDone
 )
@@ -97,14 +96,15 @@ type KindleModel struct {
 	sentence string
 	ps       phraseSet[kindle.Entry] // live phrase state for groups[groupIdx].Entries; each phrase's payload is the kindle.Entry it originated from
 
-	// sentenceInput edits the current group's sentence once, for every word
-	// in that sentence — see enterEditSentence.
-	sentenceInput textarea.Model
-
 	// refineInput collects a free-form correction for the definition of
 	// phrases[refineIdx] — see enterRefine.
 	refineInput textinput.Model
 	refineIdx   int
+
+	// glossInput edits the back of phrases[glossIdx] by hand — see
+	// enterEditGloss.
+	glossInput textinput.Model
+	glossIdx   int
 
 	added, duplicates, skipped int
 
@@ -120,17 +120,11 @@ type KindleModel struct {
 // NewKindleReview returns a KindleModel positioned at the first sentence
 // group.
 func NewKindleReview(cfg KindleConfig) KindleModel {
-	sei := textarea.New()
-	sei.Prompt = "edit: "
-	sei.ShowLineNumbers = false
-	sei.SetWidth(120)
-	sei.SetHeight(3)
-
 	m := KindleModel{
-		cfg:           cfg,
-		groups:        kindle.GroupBySentence(cfg.Entries),
-		sentenceInput: sei,
-		refineInput:   newRefineInput(),
+		cfg:         cfg,
+		groups:      kindle.GroupBySentence(cfg.Entries),
+		refineInput: newRefineInput(),
+		glossInput:  newGlossInput(),
 	}
 	m.initCmd = m.loadGroup(0)
 	return m
@@ -235,8 +229,8 @@ func (m KindleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-		m.sentenceInput.SetWidth(msg.Width)
 		m.refineInput.Width = msg.Width
+		m.glossInput.Width = msg.Width
 		return m, nil
 
 	case tea.KeyMsg:
@@ -286,7 +280,7 @@ func (m KindleModel) handleKindleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// rune, including a bare q — "quitar" typed into a correction would
 	// otherwise quit mid-review and lose the whole sentence group. `?` is
 	// likewise a literal there, so help is reachable from every other state.
-	if m.state != kEditSentence && m.state != kRefine {
+	if m.state != kRefine && m.state != kEditGloss {
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
@@ -302,10 +296,10 @@ func (m KindleModel) handleKindleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handlePickingKey(msg)
 	case kExpanding:
 		return m.handleExpandingKey(msg)
-	case kEditSentence:
-		return m.handleEditSentenceKey(msg)
 	case kRefine:
 		return m.handleRefineKey(msg)
+	case kEditGloss:
+		return m.handleEditGlossKey(msg)
 	}
 	return m, nil
 }
@@ -331,7 +325,7 @@ func (m KindleModel) handlePickingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.setStatus("", false)
 		return m, nil
 	case "e":
-		return m, m.enterEditSentence()
+		return m, m.enterEditGloss()
 	case "r":
 		cmd := m.enterRefine()
 		return m, cmd
@@ -390,52 +384,6 @@ func (m KindleModel) submitGroup() (tea.Model, tea.Cmd) {
 	return m, kindleBatchSubmitCmd(m.cfg, m.sentence, sels, skipped)
 }
 
-// enterEditSentence opens a text input pre-filled with the current
-// sentence, so typos can be fixed once for every word this sentence
-// produces a card for, rather than per word.
-func (m *KindleModel) enterEditSentence() tea.Cmd {
-	m.sentenceInput.SetValue(m.sentence)
-	m.sentenceInput.CursorEnd()
-	cmd := m.sentenceInput.Focus()
-	m.state = kEditSentence
-	m.setStatus("", false)
-	return cmd
-}
-
-func (m KindleModel) handleEditSentenceKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
-		m.sentenceInput.Blur()
-		m.state = kPicking
-		m.setStatus("", false)
-		return m, nil
-	case "enter":
-		cmd := m.applyEditedSentence(m.sentenceInput.Value())
-		m.sentenceInput.Blur()
-		return m, cmd
-	case "ctrl+c":
-		return m, tea.Quit
-	}
-	var cmd tea.Cmd
-	m.sentenceInput, cmd = m.sentenceInput.Update(msg)
-	return m, cmd
-}
-
-// applyEditedSentence saves the edit back onto the current sentence group
-// (so every word from this sentence sees it) and rebuilds every phrase
-// against the new text — any phrase extensions made before the edit are
-// lost, since their byte offsets no longer apply.
-func (m *KindleModel) applyEditedSentence(edited string) tea.Cmd {
-	if edited != m.sentence {
-		m.groups[m.groupIdx].Usage = edited
-		m.sentence = edited
-		m.resetPhrasesForSentence()
-	}
-	m.state = kPicking
-	m.setStatus("", false)
-	return m.refreshDefinitions()
-}
-
 func (m KindleModel) View() string {
 	if m.state == kDone {
 		return fmt.Sprintf("\ndone: %d added, %d already in Anki, %d skipped\n\npress enter to exit\n", m.added, m.duplicates, m.skipped)
@@ -449,13 +397,7 @@ func (m KindleModel) View() string {
 	header := titleStyle.Render(title) +
 		"  " + helpStyle.Render(m.progressText())
 
-	var body string
-	switch m.state {
-	case kEditSentence:
-		body = m.renderKindleEditSentence()
-	default:
-		body = m.renderKindlePicker()
-	}
+	body := m.renderKindlePicker()
 	if m.width > 0 {
 		body = lipgloss.NewStyle().Width(m.width).Render(body)
 	}
@@ -464,7 +406,7 @@ func (m KindleModel) View() string {
 	if m.statusErr {
 		statusLine = errStatusStyle
 	}
-	footer := statusLine.Render(m.status) + "\n" + helpStyle.Render(m.helpText())
+	footer := statusLine.Render(m.status) + "\n" + m.modeBadge() + helpStyle.Render(m.helpText())
 
 	view := header + "\n" + body + "\n" + footer + "\n"
 
@@ -499,19 +441,18 @@ func (m KindleModel) renderKindlePicker() string {
 	if m.state == kRefine && m.refineIdx < len(m.ps.phrases) {
 		b.WriteString(renderRefinePrompt(m.ps.phraseText(m.sentence, m.ps.phrases[m.refineIdx]), m.refineInput))
 	}
+	if m.state == kEditGloss && m.glossIdx < len(m.ps.phrases) {
+		b.WriteString(renderGlossEditor(m.ps.phraseText(m.sentence, m.ps.phrases[m.glossIdx]), m.glossInput))
+	}
 
 	return "\n" + b.String() + "\n"
-}
-
-func (m KindleModel) renderKindleEditSentence() string {
-	return "\n" + helpStyle.Render("fix typos in the sentence, then confirm — applies to every word from this sentence") + "\n\n" + m.sentenceInput.View() + "\n"
 }
 
 // helpText mirrors Model.helpText: a single non-wrapping hint, with the
 // bindings themselves living in the `?` modal.
 func (m KindleModel) helpText() string {
 	switch m.state {
-	case kEditSentence:
+	case kEditGloss:
 		return "enter save  esc discard"
 	case kRefine:
 		return "enter apply  esc cancel"
@@ -525,7 +466,7 @@ func (m KindleModel) helpText() string {
 // helpSections is the modal's content for the Kindle review model.
 func (m KindleModel) helpSections() []helpSection {
 	_, refine := refineAvailable(m.cfg.Dict)
-	return kindleHelpSections(refine)
+	return kindleHelpSections(m.cfg.Dict != nil, refine)
 }
 
 // kindleDefResultMsg carries a definition lookup result back for the phrase
