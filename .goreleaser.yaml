@@ -36,25 +36,9 @@ homebrew_casks:
       - formula: ollama
       - formula: yt-dlp
       - cask: anki
-    # Strip the quarantine xattr macOS applies to cask downloads, or
-    # Gatekeeper blocks the unsigned binary. Homebrew 7 deprecated the
-    # `postflight` block that hooks.post.install renders, and GoReleaser can't
-    # emit `postflight_steps` until v2.19 (goreleaser/goreleaser#6873), so
-    # custom_block carries it for now. The {{ "..." }} escape stops
-    # GoReleaser's templating from eating Homebrew's {{staged_path}} token.
-    #
-    # TODO(#13): once v2.19 ships, replace custom_block with
-    #   hooks:
-    #     post:
-    #       install_steps: |
-    #         on_macos do
-    #           run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}"], must_succeed: false
-    #         end
-    custom_block: |
-      postflight_steps do
-        on_macos do
-          run "/usr/bin/xattr",
-              args:         ["-dr", "com.apple.quarantine", "{{ "{{staged_path}}" }}"],
-              must_succeed: false
-        end
-      end
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}"]
+          end
