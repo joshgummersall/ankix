@@ -15,9 +15,11 @@ type helpSection struct {
 }
 
 // documentHelpSections is the keymap for the document browser TUI (Model).
-// refine reports whether the configured dict can take a correction — when
-// it can't, `r` is inert (see refineAvailable) and must not be advertised.
-func documentHelpSections(refine bool) []helpSection {
+// gloss reports whether lookups are on at all — without them there's no
+// card back to edit, so `e` is inert. refine reports whether the configured
+// dict can take a correction — when it can't, `r` is inert (see
+// refineAvailable). Neither dead key may be advertised.
+func documentHelpSections(gloss, refine bool) []helpSection {
 	sections := []helpSection{
 		{"Transcript", [][2]string{
 			{"h / l, ← / →", "move by word"},
@@ -41,16 +43,11 @@ func documentHelpSections(refine bool) []helpSection {
 			{") / (", "jump to next / previous marked word"},
 			{"v", "expand/add the word under the cursor as a phrase"},
 			{"d", "delete the nearest word/phrase"},
-			{"e", "edit the sentence to fix typos"},
 		}},
 		{"Phrase expand", [][2]string{
 			{"h / l, ← / →", "extend the phrase"},
 			{"enter", "confirm the phrase"},
 			{"esc", "revert the phrase"},
-		}},
-		{"Sentence editor", [][2]string{
-			{"enter", "save the edited sentence"},
-			{"esc", "discard the edit"},
 		}},
 		{"Help", [][2]string{
 			{"j / k, ↓ / ↑", "scroll this help"},
@@ -64,29 +61,24 @@ func documentHelpSections(refine bool) []helpSection {
 			{"q, ctrl+c", "quit"},
 		}},
 	}
-	return withRefine(sections, "Word picker", refine)
+	return withGlossKeys(sections, "Word picker", gloss, refine)
 }
 
 // kindleHelpSections is the keymap for the Kindle vocabulary review TUI
 // (KindleModel), which shares the phrase/expand/refine machinery but browses
 // sentence groups instead of a document.
-func kindleHelpSections(refine bool) []helpSection {
+func kindleHelpSections(gloss, refine bool) []helpSection {
 	sections := []helpSection{
 		{"Review", [][2]string{
 			{"h / l, ← / →", "move the word cursor"},
 			{"v", "expand/add the word under the cursor as a phrase"},
 			{"d", "delete the nearest word/phrase"},
-			{"e", "edit the sentence to fix typos"},
 			{"enter", "add every marked word/phrase, then next sentence"},
 		}},
 		{"Phrase expand", [][2]string{
 			{"h / l, ← / →", "extend the phrase"},
 			{"enter", "confirm the phrase"},
 			{"esc", "revert the phrase"},
-		}},
-		{"Sentence editor", [][2]string{
-			{"enter", "save the edited sentence"},
-			{"esc", "discard the edit"},
 		}},
 		{"Help", [][2]string{
 			{"j / k, ↓ / ↑", "scroll this help"},
@@ -99,13 +91,20 @@ func kindleHelpSections(refine bool) []helpSection {
 			{"q, ctrl+c", "quit"},
 		}},
 	}
-	return withRefine(sections, "Review", refine)
+	return withGlossKeys(sections, "Review", gloss, refine)
 }
 
-// refineHelp is listed under the picker section, and only when the dict can
-// actually refine — otherwise the help would advertise a dead key. Its
-// description names the Refine prompt so the key points at the section
+// editGlossHelp and refineHelp are listed under the picker section, and only
+// when the key actually works — otherwise the help would advertise a dead
+// key. Each description names its prompt so the key points at the section
 // listing that prompt's own bindings.
+var editGlossHelp = [2]string{"e", "open the Card back editor for the translation"}
+
+var editGlossSection = helpSection{"Card back editor", [][2]string{
+	{"enter", "save the edited card back"},
+	{"esc", "discard the edit"},
+}}
+
 var refineHelp = [2]string{"r", "open the Refine prompt for the translation"}
 
 var refineSection = helpSection{"Refine prompt", [][2]string{
@@ -113,15 +112,26 @@ var refineSection = helpSection{"Refine prompt", [][2]string{
 	{"esc", "cancel the correction"},
 }}
 
-func withRefine(sections []helpSection, pickerTitle string, refine bool) []helpSection {
-	if !refine {
+func withGlossKeys(sections []helpSection, pickerTitle string, gloss, refine bool) []helpSection {
+	var keys [][2]string
+	var extra []helpSection
+	if gloss {
+		keys = append(keys, editGlossHelp)
+		extra = append(extra, editGlossSection)
+	}
+	if refine {
+		keys = append(keys, refineHelp)
+		extra = append(extra, refineSection)
+	}
+	if len(keys) == 0 {
 		return sections
 	}
-	out := make([]helpSection, 0, len(sections)+1)
+	out := make([]helpSection, 0, len(sections)+len(extra))
 	for _, s := range sections {
 		if s.title == pickerTitle {
-			s.bindings = append(append([][2]string{}, s.bindings...), refineHelp)
-			out = append(out, s, refineSection)
+			s.bindings = append(append([][2]string{}, s.bindings...), keys...)
+			out = append(out, s)
+			out = append(out, extra...)
 			continue
 		}
 		out = append(out, s)

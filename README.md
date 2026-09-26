@@ -214,7 +214,8 @@ terminal UI for browsing and generating cards; `review` opens an existing
 `.vtt` transcript file directly, skipping `yt-dlp`.
 
 Once words are marked, `r` on a marked word re-prompts the model to fix its
-translation — see [Fixing a translation](#fixing-a-translation).
+translation, and `e` lets you edit it by hand — see
+[Fixing a translation](#fixing-a-translation).
 
 Flags (persistent across both subcommands):
 
@@ -314,9 +315,15 @@ each one starts from the current answer, so you can narrow in over a couple
 of passes. Re-scoping the phrase with `v` (or deleting it with `d`) discards
 the correction, since it no longer describes the same words.
 
-`r` works in the Kindle, YouTube, podcast, web and file review screens, and
-is inert under `--no-gloss`. It edits the preview only — cards already synced
-to Anki aren't touched.
+When it's quicker to type the answer yourself, press `e` instead: it opens
+the card back in an editor, pre-filled with the current answer, for ordinary
+typing and deleting. `enter` saves it and `esc` discards the edit. The lemma
+is kept as it is. Like a correction, a hand edit survives until the phrase is
+re-scoped.
+
+`r` and `e` work in the Kindle, YouTube, podcast, web and file review
+screens, and are inert under `--no-gloss`. They edit the preview only —
+cards already synced to Anki aren't touched.
 
 **This needs the model rebuilt** after upgrading — `ankix` will tell you so
 and refuse to run until you do, rather than quietly using the old one. See

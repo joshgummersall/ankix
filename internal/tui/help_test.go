@@ -137,16 +137,17 @@ func TestHelp_OpensFromEveryNonTextState(t *testing.T) {
 // In the text prompts `?` is a character the user is typing, so it must
 // reach the input rather than opening the modal.
 func TestHelp_IsALiteralInTextPrompts(t *testing.T) {
-	m := send(t, helpTestModel(t, 100, 24), "enter", "e")
-	if m.state != stateEditSentence {
-		t.Fatalf("state = %v, want stateEditSentence", m.state)
+	d := &fakeDict{definition: "new keys", lemma: "key", refined: "keys"}
+	m := send(t, markedWordPickModel(t, "Compré unas llaves nuevas.", 2, d), "e")
+	if m.state != stateEditGloss {
+		t.Fatalf("state = %v, want stateEditGloss", m.state)
 	}
 	m = send(t, m, "?")
 	if m.showHelp {
-		t.Fatalf("? opened help in the sentence editor instead of being typed")
+		t.Fatalf("? opened help in the card back editor instead of being typed")
 	}
-	if !strings.HasSuffix(m.sentenceInput.Value(), "?") {
-		t.Errorf("sentence input = %q, want it to end in the typed ?", m.sentenceInput.Value())
+	if !strings.HasSuffix(m.glossInput.Value(), "?") {
+		t.Errorf("card back input = %q, want it to end in the typed ?", m.glossInput.Value())
 	}
 }
 
@@ -206,7 +207,7 @@ func TestHelpSections_OmitRefineWithoutARefiner(t *testing.T) {
 			if refine {
 				t.Fatalf("refineAvailable = true, want false for %s", name)
 			}
-			for _, sections := range [][]helpSection{documentHelpSections(refine), kindleHelpSections(refine)} {
+			for _, sections := range [][]helpSection{documentHelpSections(d != nil, refine), kindleHelpSections(d != nil, refine)} {
 				body := strings.ToLower(strings.Join(helpContentLines(sections), "\n"))
 				if strings.Contains(body, "refine") {
 					t.Errorf("help advertises a dead key:\n%s", body)
@@ -215,7 +216,7 @@ func TestHelpSections_OmitRefineWithoutARefiner(t *testing.T) {
 		})
 	}
 
-	for _, sections := range [][]helpSection{documentHelpSections(true), kindleHelpSections(true)} {
+	for _, sections := range [][]helpSection{documentHelpSections(true, true), kindleHelpSections(true, true)} {
 		body := strings.ToLower(strings.Join(helpContentLines(sections), "\n"))
 		if !strings.Contains(body, "refine") {
 			t.Errorf("help omits refine even though the dict supports it:\n%s", body)

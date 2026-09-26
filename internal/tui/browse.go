@@ -27,7 +27,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// The two text-entry states swallow `?` as a literal character, so help
 	// is reachable from every other state.
-	if msg.String() == "?" && m.state != stateEditSentence && m.state != stateRefine {
+	if msg.String() == "?" && m.state != stateRefine && m.state != stateEditGloss {
 		m.showHelp = true
 		m.helpScroll = 0
 		return m, nil
@@ -40,10 +40,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleWordPickKey(msg)
 	case stateWordExpand:
 		return m.handleWordExpandKey(msg)
-	case stateEditSentence:
-		return m.handleEditSentenceKey(msg)
 	case stateRefine:
 		return m.handleRefineKey(msg)
+	case stateEditGloss:
+		return m.handleEditGlossKey(msg)
 	}
 	return m, nil
 }
