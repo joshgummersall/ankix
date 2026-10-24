@@ -39,10 +39,12 @@ jobs:
 
       - uses: goreleaser/goreleaser-action@v7
         with:
-          # Pin the GoReleaser CLI's major rather than tracking latest,
-          # which the action resolves to this anyway while warning about
-          # it — and would silently follow across a future major.
-          version: "~> v2"
+          # Pin the GoReleaser CLI rather than tracking latest, which the
+          # action resolves to v2 anyway while warning about it — and would
+          # silently follow across a future major. v2.19 is the floor: the
+          # cask's hooks.post.install_steps key and .StagedPath field were
+          # added there.
+          version: "~> v2.19"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
