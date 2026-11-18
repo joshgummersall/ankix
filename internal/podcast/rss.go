@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/joshgummersall/ankix/internal/textutil"
 )
 
 type rssFeed struct {
@@ -84,7 +86,7 @@ func FindItem(feedURL string, ep Episode) (*Item, error) {
 	}
 
 	return &Item{
-		Title:          item.Title,
+		Title:          strings.TrimSpace(textutil.StripControl(item.Title)),
 		AudioURL:       item.Enclosure.URL,
 		TranscriptURL:  transcriptURL,
 		TranscriptType: transcriptType,

@@ -10,8 +10,10 @@ import (
 // what the user is looking at is ankix's own review screen, and Anki only
 // has to be running, not in front of it. -a takes the app by name, so a
 // relocated Anki.app is still found the way a Dock click would find it.
+// open is a system tool at a fixed path, so it's named in full rather than
+// looked up on PATH.
 func launchApp() error {
-	out, err := exec.Command("open", "-g", "-a", "Anki").CombinedOutput()
+	out, err := exec.Command("/usr/bin/open", "-g", "-a", "Anki").CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("starting Anki: %w: %s", err, strings.TrimSpace(string(out)))
 	}

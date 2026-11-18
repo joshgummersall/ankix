@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/joshgummersall/ankix/internal/textutil"
 )
 
 // Fetch downloads a subtitle track in lang for url using yt-dlp, caching the
@@ -23,7 +25,7 @@ func Fetch(url, lang, cacheDir string) (path, videoID string, err error) {
 		return "", "", fmt.Errorf("resolve video id: %w", err)
 	}
 
-	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+	if err := os.MkdirAll(cacheDir, 0o700); err != nil {
 		return "", "", fmt.Errorf("create cache dir: %w", err)
 	}
 
@@ -50,12 +52,14 @@ func Fetch(url, lang, cacheDir string) (path, videoID string, err error) {
 
 // GetTitle returns the video's title via yt-dlp.
 func GetTitle(url string) (string, error) {
-	cmd := exec.Command("yt-dlp", "--get-title", url)
+	// "--" ends option parsing, so a url that starts with "-" is taken as
+	// a URL rather than as a yt-dlp option (--exec among them).
+	cmd := exec.Command("yt-dlp", "--get-title", "--", url)
 	output, err := cmd.Output()
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSpace(string(output)), nil
+	return strings.TrimSpace(textutil.StripControl(string(output))), nil
 }
 
 func runYtDlp(url, lang, out string, auto bool) error {
@@ -65,7 +69,7 @@ func runYtDlp(url, lang, out string, auto bool) error {
 	} else {
 		args = append(args, "--write-subs")
 	}
-	args = append(args, url)
+	args = append(args, "--", url)
 
 	cmd := exec.Command("yt-dlp", args...)
 	output, err := cmd.CombinedOutput()
@@ -83,13 +87,22 @@ func GetVideoID(url string) (string, error) {
 	if m := videoIDRe.FindStringSubmatch(url); m != nil {
 		return m[1], nil
 	}
-	cmd := exec.Command("yt-dlp", "--get-id", url)
+	cmd := exec.Command("yt-dlp", "--get-id", "--", url)
 	output, err := cmd.Output()
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSpace(string(output)), nil
+	id := strings.TrimSpace(string(output))
+	// The id becomes part of a cache file name and a glob pattern, so it
+	// has to be a single plain name: a playlist URL prints one id per line,
+	// and other extractors' ids aren't guaranteed to be path-safe.
+	if !plainIDRe.MatchString(id) {
+		return "", fmt.Errorf("yt-dlp returned an unusable video id %q (is this a playlist URL?)", id)
+	}
+	return id, nil
 }
+
+var plainIDRe = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 
 // findSubFile globs for a previously-downloaded subtitle file for videoID
 // and lang, since yt-dlp's exact suffix (e.g. ".es.vtt" vs ".es-en.vtt" for

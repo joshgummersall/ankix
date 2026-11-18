@@ -1,6 +1,7 @@
 package kindle
 
 import (
+	"html"
 	"regexp"
 	"strings"
 
@@ -79,7 +80,12 @@ var (
 // on its own italic line, breaks out numbered senses onto their own
 // lines, and renders "▸" example sentences as an indented, italicized
 // list.
+//
+// raw is plain text (a model reply or a dictionary entry) and is
+// HTML-escaped first, so the only markup in the result is what this
+// function adds.
 func FormatDefinition(word, raw string) string {
+	raw, word = html.EscapeString(raw), html.EscapeString(word)
 	def := pronunciationRe.ReplaceAllString(raw, " ")
 	def = strings.TrimSpace(def)
 

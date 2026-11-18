@@ -121,6 +121,12 @@ syntax is trimmed automatically. The data available to both templates
 | `LinkLabel`   | `"watch"` / `"listen"` / `"read"`, `""` if `Link` is `""`                   |
 | `Attribution` | `Source`, `Timestamp` and `Link` pre-combined into one HTML fragment, e.g. `Title (3:41) — <a href="...">watch</a>` |
 
+Every field except `Definition` and `Attribution` is plain text that
+`ankix` HTML-escapes before your template sees it, so sentence text, titles
+and links taken from a web page or a feed can't add markup of their own to a
+card. `Definition` and `Attribution` are HTML fragments built the same way:
+escaped text plus `ankix`'s own tags.
+
 A template with bad syntax, or one referencing a field that doesn't exist,
 is rejected with an error as soon as `ankix` starts, rather than surfacing
 mid-sync or mid-review.

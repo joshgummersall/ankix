@@ -7,6 +7,7 @@ package podcast
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -29,7 +30,24 @@ func getWithUserAgent(url string) (*http.Response, error) {
 	req.Header.Set("User-Agent", userAgent)
 
 	client := &http.Client{Timeout: httpTimeout}
-	return client.Do(req)
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	resp.Body = &limitedBody{Reader: io.LimitReader(resp.Body, maxResponseBytes), Closer: resp.Body}
+	return resp, nil
+}
+
+// maxResponseBytes caps how much of any one response is read. Feed and
+// transcript URLs come from third parties (iTunes names the feed, the feed
+// names the transcript), so their size isn't ankix's to trust; a long
+// show's feed runs to tens of megabytes, and this sits well above that. A
+// response cut off here fails to parse rather than being read to the end.
+const maxResponseBytes = 64 << 20
+
+type limitedBody struct {
+	io.Reader
+	io.Closer
 }
 
 var (

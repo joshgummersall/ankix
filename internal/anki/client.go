@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // ErrDuplicate is returned by AddNote when AnkiConnect rejects the note
@@ -24,8 +25,13 @@ type Client struct {
 // New returns a Client pointed at the given AnkiConnect URL
 // (e.g. "http://localhost:8765").
 func New(url string) *Client {
-	return &Client{URL: url, HTTPClient: http.DefaultClient}
+	return &Client{URL: url, HTTPClient: &http.Client{Timeout: requestTimeout}}
 }
+
+// requestTimeout bounds one AnkiConnect call. Every call ankix makes is a
+// quick local operation, so this only ever fires when Anki has stopped
+// answering, where the alternative is a review screen that hangs forever.
+const requestTimeout = 30 * time.Second
 
 type request struct {
 	Action  string `json:"action"`
@@ -48,6 +54,10 @@ func (c *Client) invoke(action string, params, result any) error {
 		return fmt.Errorf("anki-connect %s: %w (is Anki running with AnkiConnect installed?)", action, err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("anki-connect %s: unexpected status %s (is %s really AnkiConnect?)", action, resp.Status, c.URL)
+	}
 
 	var r response
 	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {

@@ -14,6 +14,7 @@ import (
 	"github.com/joshgummersall/ankix/internal/anki"
 	"github.com/joshgummersall/ankix/internal/dict"
 	"github.com/joshgummersall/ankix/internal/position"
+	"github.com/joshgummersall/ankix/internal/textutil"
 )
 
 type state int
@@ -98,6 +99,16 @@ type Model struct {
 func New(cfg Config) Model {
 	si := textinput.New()
 	si.Prompt = "/"
+
+	// Every source's text passes through here on its way to the terminal,
+	// so this is the backstop for any that didn't strip control characters
+	// itself (a local file, a transcript opened from disk).
+	cfg.Title = textutil.StripControl(cfg.Title)
+	doc := &Document{SourceID: cfg.Document.SourceID, Lines: make([]Line, len(cfg.Document.Lines))}
+	for i, l := range cfg.Document.Lines {
+		doc.Lines[i] = Line{Label: textutil.StripControl(l.Label), Text: textutil.StripControl(l.Text)}
+	}
+	cfg.Document = doc
 
 	words := flattenWords(cfg.Document.Lines)
 	lineFirstWord := make([]int, len(cfg.Document.Lines))
@@ -206,7 +217,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) setStatus(s string, isErr bool) {
-	m.status = s
+	// Statuses carry error text from AnkiConnect and Ollama verbatim.
+	m.status = textutil.StripControl(s)
 	m.statusErr = isErr
 }
 
