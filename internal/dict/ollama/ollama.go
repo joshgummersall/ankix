@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/joshgummersall/ankix/internal/textutil"
 )
 
 // DefaultKeepAlive is how long ankix asks Ollama to hold the model in
@@ -181,7 +183,7 @@ func (p *Provider) chat(msgs []chatMessage) (string, error) {
 		return "", fmt.Errorf("ollama chat: decode response: %w", err)
 	}
 
-	result := strings.TrimSpace(r.Message.Content)
+	result := strings.TrimSpace(textutil.StripControl(r.Message.Content))
 	if result == "" {
 		return "", fmt.Errorf("ollama chat: empty response")
 	}

@@ -82,3 +82,18 @@ func TestNewAnkiClient_CanBeCalledTwice(t *testing.T) {
 		t.Errorf("second newAnkiClient: %v", err)
 	}
 }
+
+func TestAnkiEscapeMatchesLiterally(t *testing.T) {
+	cases := map[string]string{
+		"plain":   "plain",
+		"a_b":     `a\_b`,
+		"x*":      `x\*`,
+		`q"uote`:  `q\"uote`,
+		`back\sl`: `back\\sl`,
+	}
+	for in, want := range cases {
+		if got := ankiEscape(in); got != want {
+			t.Errorf("ankiEscape(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

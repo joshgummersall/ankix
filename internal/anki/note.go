@@ -2,6 +2,8 @@ package anki
 
 import (
 	"fmt"
+	"html"
+	"net/url"
 	"regexp"
 	"time"
 )
@@ -31,7 +33,7 @@ func BuildYouTubeNote(tmpl *Templates, deck, videoTitle, videoID string, cueStar
 		Before:      sentence[:sel.Start],
 		After:       sentence[sel.End:],
 		Highlighted: true,
-		Definition:  sel.Gloss,
+		Definition:  html.EscapeString(sel.Gloss),
 		Lemma:       sel.Lemma,
 		Source:      videoTitle,
 		Timestamp:   timestamp,
@@ -65,7 +67,7 @@ func BuildNote(tmpl *Templates, deck, title, url, sourceTag, sentence string, se
 		Before:      sentence[:sel.Start],
 		After:       sentence[sel.End:],
 		Highlighted: true,
-		Definition:  sel.Gloss,
+		Definition:  html.EscapeString(sel.Gloss),
 		Lemma:       sel.Lemma,
 		Source:      title,
 		Link:        url,
@@ -99,7 +101,7 @@ func BuildPodcastNote(tmpl *Templates, deck, episodeTitle, audioURL string, cueS
 		Before:      sentence[:sel.Start],
 		After:       sentence[sel.End:],
 		Highlighted: true,
-		Definition:  sel.Gloss,
+		Definition:  html.EscapeString(sel.Gloss),
 		Lemma:       sel.Lemma,
 		Source:      episodeTitle,
 		Timestamp:   timestamp,
@@ -128,7 +130,10 @@ func BuildPodcastNote(tmpl *Templates, deck, episodeTitle, audioURL string, cueS
 // to roughly cueStart in players (e.g. HTML5 <audio>) that support it, or ""
 // if audioURL is empty.
 func AudioLink(audioURL string, cueStart time.Duration) string {
-	if audioURL == "" {
+	// The URL comes from the show's feed and ends up in an href, so only a
+	// web link is let through — not javascript: or anything else a card's
+	// webview would act on.
+	if u, err := url.Parse(audioURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") {
 		return ""
 	}
 	seconds := int(cueStart.Round(time.Second).Seconds()) - 1

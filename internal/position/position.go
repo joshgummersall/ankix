@@ -64,12 +64,29 @@ func Save(sourceID string, pos Position) error {
 	}
 	positions[sourceID] = pos
 
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+	// The file lists what the user has been reading (URLs, file paths), so
+	// it is private to them, like the import log beside it.
+	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(positions, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(p, data, 0o644)
+
+	// Write beside the target and rename over it, so a crash or a second
+	// ankix saving at the same moment can't leave a half-written file.
+	tmp, err := os.CreateTemp(filepath.Dir(p), "positions-*.json")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), p)
 }

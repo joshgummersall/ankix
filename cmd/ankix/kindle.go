@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"html"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -16,6 +17,7 @@ import (
 	"github.com/joshgummersall/ankix/internal/anki"
 	"github.com/joshgummersall/ankix/internal/dict/ollama"
 	"github.com/joshgummersall/ankix/internal/kindle"
+	"github.com/joshgummersall/ankix/internal/textutil"
 	"github.com/joshgummersall/ankix/internal/tui"
 )
 
@@ -179,7 +181,7 @@ func runSync(o *syncOptions) (err error) {
 		note := kindle.BuildNote(cardTemplates, deck, o.tags, e, e.Usage, start, end, kindle.FormatDefinition(e.Word, definition), lemma)
 
 		if o.dryRun {
-			fmt.Printf("would add %q\n  front: %s\n  back:  %s\n", e.Word, note.Fields["Front"], note.Fields["Back"])
+			fmt.Printf("would add %q\n  front: %s\n  back:  %s\n", e.Word, textutil.StripControl(note.Fields["Front"]), textutil.StripControl(note.Fields["Back"]))
 			added++
 			continue
 		}
@@ -222,7 +224,7 @@ func ejectVolume(path string) error {
 	}
 	volume := volumesDir + strings.SplitN(strings.TrimPrefix(abs, volumesDir), "/", 2)[0]
 
-	out, err := exec.Command("diskutil", "eject", volume).CombinedOutput()
+	out, err := exec.Command("/usr/sbin/diskutil", "eject", volume).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("eject %s: %w: %s", volume, err, strings.TrimSpace(string(out)))
 	}
@@ -263,13 +265,27 @@ func finishEntry(db *sql.DB, log *kindle.ImportLog, e kindle.Entry, outcome stri
 }
 
 func noteExists(client *anki.Client, deck, phrase string) (bool, error) {
-	query := fmt.Sprintf(`deck:%q Front:%q`, deck, "<b>"+phrase+"</b>*")
+	// The front field holds the HTML-escaped phrase (see
+	// anki.Templates.Render), so that is what has to be searched for. The
+	// trailing * is the one intended wildcard: the headword starts the
+	// field and the sentence follows it.
+	query := `deck:"` + ankiEscape(deck) + `" Front:"` + ankiEscape("<b>"+html.EscapeString(phrase)+"</b>") + `*"`
 	ids, err := client.FindNotes(query)
 	if err != nil {
 		return false, err
 	}
 	return len(ids) > 0, nil
 }
+
+// ankiEscape escapes s for use inside a quoted Anki search term, so it is
+// matched literally. Unescaped, "_" and "*" are wildcards -- a lookup for
+// "a_b" also finds "axb", and that word would then be retired as a
+// duplicate without ever getting a card.
+func ankiEscape(s string) string {
+	return ankiSearchEscaper.Replace(s)
+}
+
+var ankiSearchEscaper = strings.NewReplacer(`\`, `\\`, `"`, `\"`, `*`, `\*`, `_`, `\_`)
 
 // dedupeEntries collapses entries (most-recently-looked-up first) down to
 // one per word, keeping the most recent lookup's Entry.

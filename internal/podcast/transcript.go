@@ -29,19 +29,30 @@ func FetchTranscript(item *Item) ([]subtitle.Cue, error) {
 		return nil, fmt.Errorf("fetch transcript %s: unexpected status %s", item.TranscriptURL, resp.Status)
 	}
 
+	cues, err := parseTranscript(resp.Body, item)
+	if err != nil {
+		return nil, err
+	}
+	for i := range cues {
+		cues[i].Text = textutil.StripControl(cues[i].Text)
+	}
+	return cues, nil
+}
+
+func parseTranscript(body io.Reader, item *Item) ([]subtitle.Cue, error) {
 	switch {
 	case strings.Contains(item.TranscriptType, "vtt"):
-		t, err := subtitle.ParseVTTReader(resp.Body, item.TranscriptURL)
+		t, err := subtitle.ParseVTTReader(body, item.TranscriptURL)
 		if err != nil {
 			return nil, fmt.Errorf("parse vtt transcript: %w", err)
 		}
 		return t.Cues, nil
 	case strings.Contains(item.TranscriptType, "srt"):
-		return parseSRT(resp.Body)
+		return parseSRT(body)
 	case strings.Contains(item.TranscriptType, "json"):
-		return parseJSONTranscript(resp.Body)
+		return parseJSONTranscript(body)
 	default:
-		return parseHTMLTranscript(resp.Body)
+		return parseHTMLTranscript(body)
 	}
 }
 

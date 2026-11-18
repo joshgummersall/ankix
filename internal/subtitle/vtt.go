@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/joshgummersall/ankix/internal/textutil"
 )
 
 var (
@@ -79,7 +81,7 @@ func parseCues(r io.Reader) ([]Cue, error) {
 }
 
 func cleanText(s string) string {
-	s = tagRe.ReplaceAllString(s, "")
+	s = textutil.StripControl(tagRe.ReplaceAllString(s, ""))
 	s = strings.Join(strings.Fields(s), " ")
 	return strings.TrimSpace(s)
 }

@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/joshgummersall/ankix/internal/anki"
+	"github.com/joshgummersall/ankix/internal/textutil"
 )
 
 // enterWordPick loads the selected document words into a fresh sentence
@@ -132,7 +133,7 @@ func (m Model) renderWordPicker() string {
 	b.WriteString(helpStyle.Render(fmt.Sprintf("%d %s will be added, deck: %s", cards, word, m.cfg.Deck)))
 	if m.cfg.PreviewLink != nil {
 		if link := m.cfg.PreviewLink(m.selLineIndex); link != "" {
-			b.WriteString("\n" + helpStyle.Render("link: "+link))
+			b.WriteString("\n" + helpStyle.Render("link: "+textutil.StripControl(link)))
 		}
 	}
 	b.WriteString("\n")

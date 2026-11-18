@@ -13,6 +13,7 @@ import (
 	"github.com/joshgummersall/ankix/internal/anki"
 	"github.com/joshgummersall/ankix/internal/dict"
 	"github.com/joshgummersall/ankix/internal/kindle"
+	"github.com/joshgummersall/ankix/internal/textutil"
 )
 
 type kState int
@@ -217,7 +218,8 @@ func (m KindleModel) progressText() string {
 }
 
 func (m *KindleModel) setStatus(s string, isErr bool) {
-	m.status = s
+	// Statuses carry error text from AnkiConnect and Ollama verbatim.
+	m.status = textutil.StripControl(s)
 	m.statusErr = isErr
 }
 

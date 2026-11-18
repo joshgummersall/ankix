@@ -2,6 +2,7 @@ package anki
 
 import (
 	"fmt"
+	"html"
 	"io"
 	"strings"
 	"text/template"
@@ -10,6 +11,13 @@ import (
 // CardData is the data a Front/Back card template renders from. Sentence
 // text is split around the marked word/phrase rather than given whole,
 // since each builder needs to wrap only that phrase (e.g. in <i>...</i>).
+//
+// Card fields are HTML, and almost everything here is text ankix didn't
+// write (a web page, a subtitle track, a feed, a model reply). So every
+// field is HTML-escaped by Render before a template sees it, except the two
+// documented as HTML: Definition and Attribution, whose builders escape the
+// untrusted text inside them and add only their own markup.
+//
 // Fields that don't apply to a given source (e.g. Timestamp for a web
 // article) are the empty string, and the default templates degrade
 // gracefully when that happens.
@@ -38,12 +46,12 @@ func formatAttribution(source, timestamp, link, linkLabel string) string {
 	if source == "" {
 		return ""
 	}
-	s := source
+	s := html.EscapeString(source)
 	if timestamp != "" {
-		s += " (" + timestamp + ")"
+		s += " (" + html.EscapeString(timestamp) + ")"
 	}
 	if link != "" {
-		s += fmt.Sprintf(` — <a href="%s">%s</a>`, link, linkLabel)
+		s += fmt.Sprintf(` — <a href="%s">%s</a>`, html.EscapeString(link), html.EscapeString(linkLabel))
 	}
 	return s
 }
@@ -145,6 +153,14 @@ func (t *Templates) Render(data CardData) (front, back string) {
 	if t == nil {
 		t = defaultTemplates
 	}
+	data.Word = html.EscapeString(data.Word)
+	data.Before = html.EscapeString(data.Before)
+	data.After = html.EscapeString(data.After)
+	data.Lemma = html.EscapeString(data.Lemma)
+	data.Source = html.EscapeString(data.Source)
+	data.Timestamp = html.EscapeString(data.Timestamp)
+	data.Link = html.EscapeString(data.Link)
+	data.LinkLabel = html.EscapeString(data.LinkLabel)
 
 	var fb, bb strings.Builder
 	if err := t.front.Execute(&fb, data); err != nil {

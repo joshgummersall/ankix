@@ -142,3 +142,18 @@ func TestScrolling_JKeepsTheColumn(t *testing.T) {
 		t.Errorf("after j column = %d, want near %d", got, col)
 	}
 }
+
+func TestNewStripsControlCharacters(t *testing.T) {
+	m := New(Config{
+		Document: &Document{Lines: []Line{{Text: "hola \x1b]52;c;cHduZWQ=\x07 mundo"}}},
+		Title:    "T\x1b]0;x\x07",
+	})
+	if strings.ContainsAny(m.cfg.Title, "\x1b\x07") {
+		t.Errorf("title kept control characters: %q", m.cfg.Title)
+	}
+	for _, w := range m.words {
+		if strings.ContainsAny(w.Text, "\x1b\x07") {
+			t.Errorf("word kept control characters: %q", w.Text)
+		}
+	}
+}

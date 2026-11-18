@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -14,6 +15,8 @@ import (
 	"time"
 
 	_ "modernc.org/sqlite"
+
+	"github.com/joshgummersall/ankix/internal/textutil"
 )
 
 // Entry is a single vocabulary word paired with the sentence it was
@@ -31,7 +34,7 @@ type Entry struct {
 
 // Open opens a Kindle vocab.db file read-only.
 func Open(path string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", fmt.Sprintf("file:%s?mode=ro", path))
+	db, err := sql.Open("sqlite", dsn(path, "ro"))
 	if err != nil {
 		return nil, fmt.Errorf("open vocab.db: %w", err)
 	}
@@ -50,7 +53,7 @@ func OpenRW(path string) (*sql.DB, error) {
 		return nil, err
 	}
 
-	db, err := sql.Open("sqlite", fmt.Sprintf("file:%s?mode=rw", path))
+	db, err := sql.Open("sqlite", dsn(path, "rw"))
 	if err != nil {
 		return nil, fmt.Errorf("open vocab.db: %w", err)
 	}
@@ -61,13 +64,32 @@ func OpenRW(path string) (*sql.DB, error) {
 	return db, nil
 }
 
+// dsn builds the SQLite URI for path. The path is percent-encoded rather
+// than pasted in, because a URI gives "?", "#" and "%" meanings a file name
+// doesn't intend: unescaped, "my#1.db" opens (and creates) a file called
+// "my", and a path ending in "?mode=rw" overrides the mode asked for here.
+func dsn(path, mode string) string {
+	if abs, err := filepath.Abs(path); err == nil {
+		path = abs
+	}
+	path = filepath.ToSlash(path)
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path // a Windows drive path: file:///C:/...
+	}
+	u := url.URL{Scheme: "file", Path: path, RawQuery: "mode=" + mode}
+	return u.String()
+}
+
 // configRoot is ankix's own durable state directory. It's the user's config
 // directory (not a cache directory) since what lives here — vocab.db
 // backups, the import log — is meant to survive OS cache cleanup.
 func configRoot() (string, error) {
+	// No fallback to a temp directory: backups and the import log are
+	// meant to last, and a shared /tmp path is one another local user can
+	// create first.
 	dir, err := os.UserConfigDir()
 	if err != nil {
-		dir = os.TempDir()
+		return "", fmt.Errorf("locate config directory: %w", err)
 	}
 	return filepath.Join(dir, "ankix"), nil
 }
@@ -130,7 +152,7 @@ func backup(path string) error {
 	}
 	defer src.Close()
 
-	dst, err := os.Create(filepath.Join(dir, fmt.Sprintf("%d.db", time.Now().UnixNano())))
+	dst, err := os.OpenFile(filepath.Join(dir, fmt.Sprintf("%d.db", time.Now().UnixNano())), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return fmt.Errorf("back up vocab.db: %w", err)
 	}
@@ -274,6 +296,13 @@ func Entries(db *sql.DB, lang string, includeMastered bool) ([]Entry, error) {
 		if err := rows.Scan(&e.ID, &e.Word, &e.Stem, &e.Lang, &e.Usage, &e.BookTitle, &e.Authors, &e.Timestamp); err != nil {
 			return nil, fmt.Errorf("scan lookup: %w", err)
 		}
+		// Book text is as untrusted as a web page once it reaches the
+		// terminal. ID is left alone: it's the key back into vocab.db.
+		e.Word = textutil.StripControl(e.Word)
+		e.Stem = textutil.StripControl(e.Stem)
+		e.Usage = textutil.StripControl(e.Usage)
+		e.BookTitle = textutil.StripControl(e.BookTitle)
+		e.Authors = textutil.StripControl(e.Authors)
 		entries = append(entries, e)
 	}
 	return entries, rows.Err()
